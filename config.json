@@ -1,0 +1,36 @@
+{
+  "ai_mode": "ollama",
+  "claude_api_key": "",
+  "claude_model": "claude-haiku-4-5-20251001",
+  "ollama_model": "llama3",
+  "ollama_url": "http://localhost:11434/api/generate",
+  "ws_port": 8765,
+  "user_name": "P7",
+  "assistant_name": "PHANTRON",
+  "wake_word": "phantron",
+
+  "voice_output_enabled": true,
+  "voice_input_enabled": true,
+  "tts_engine": "auto",
+  "tts_voice_edge": "hi-IN-MadhurNeural",
+  "stt_language": "hi-IN",
+
+  "autonomous": true,
+  "max_agent_steps": 6,
+  "open_interface": true,
+
+  "screen_broadcast": true,
+  "screen_interval_sec": 4,
+  "metrics_interval_sec": 2,
+
+  "projects_dir": "D:\\Phantron\\Projects",
+  "files_dir": "D:\\Phantron\\Files",
+
+  "agent_max_steps": 12,
+  "agent_max_fix_attempts": 3,
+  "agent_command_timeout": 900,
+  "agent_safe_mode": true,
+  "agent_allow_shutdown": false,
+  "unreal_engine_dir": "",
+  "android_sdk_dir": ""
+}
