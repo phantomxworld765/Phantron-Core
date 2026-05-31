@@ -14,3 +14,9 @@ screenshot_*.png
 .DS_Store
 Thumbs.db
 *.log
+
+# Secrets — never commit your real API keys.
+# config.json holds your private keys (OpenRouter / Claude). It stays LOCAL.
+# Use config.example.json as the shareable template.
+config.json
+*.bak

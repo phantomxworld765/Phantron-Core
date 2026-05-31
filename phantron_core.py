@@ -55,6 +55,9 @@ DEFAULT = {
     "ai_mode": "ollama",
     "claude_api_key": "",
     "claude_model": "claude-haiku-4-5-20251001",
+    "openrouter_api_key": "",
+    "openrouter_model": "anthropic/claude-opus-4.8",
+    "openrouter_url": "https://openrouter.ai/api/v1/chat/completions",
     "ollama_model": "llama3",
     "ollama_url": "http://localhost:11434/api/generate",
     "ws_port": 8765,
@@ -1172,21 +1175,71 @@ def _ask_claude_raw(prompt, system):
         return "__ERR__ Claude: " + str(e)[:80]
 
 
+def _ask_openrouter_raw(prompt, system):
+    """OpenRouter is OpenAI-compatible and proxies 400+ models (incl. Opus 4.8)
+    through one key. Pure-stdlib HTTP, so no extra pip install needed."""
+    key = CONFIG.get("openrouter_api_key")
+    if not key:
+        return None
+    try:
+        resp = _http_post_json(
+            CONFIG.get("openrouter_url", DEFAULT["openrouter_url"]),
+            {"model": CONFIG.get("openrouter_model", DEFAULT["openrouter_model"]),
+             "messages": [{"role": "system", "content": system},
+                          {"role": "user", "content": prompt}],
+             "max_tokens": 600,
+             "temperature": 0.6},
+            timeout=60,
+            headers={"Authorization": "Bearer " + key,
+                     "HTTP-Referer": "https://github.com/phantomxworld765/Phantron-Core",
+                     "X-Title": "PHANTRON"})
+        if resp.get("error"):
+            return "__ERR__ OpenRouter: " + str(resp["error"])[:80]
+        choices = resp.get("choices") or []
+        if choices:
+            return ((choices[0].get("message") or {}).get("content") or "").strip()
+        return ""
+    except Exception as e:
+        return "__ERR__ OpenRouter: " + str(e)[:80]
+
+
 def _ai_raw(prompt, system):
-    """Pick the configured backend; fall back gracefully."""
-    if CONFIG.get("ai_mode") == "claude" and CONFIG.get("claude_api_key"):
+    """Pick the configured backend; fall back gracefully:
+    configured ONLINE provider -> local Ollama -> any other online key -> offline."""
+    mode = CONFIG.get("ai_mode")
+    last = ""
+
+    # 1. the ONLINE provider chosen in config
+    if mode == "openrouter" and CONFIG.get("openrouter_api_key"):
+        out = _ask_openrouter_raw(prompt, system)
+        if out and not out.startswith("__ERR__"):
+            return out
+        last = out or last
+    if mode == "claude" and CONFIG.get("claude_api_key"):
         out = _ask_claude_raw(prompt, system)
         if out and not out.startswith("__ERR__"):
             return out
+        last = out or last
+
+    # 2. local Ollama (free / offline)
     out = _ask_ollama_raw(prompt, system)
     if out and not out.startswith("__ERR__"):
         return out
-    # last resort: try claude even if not primary
+    last = out or last
+
+    # 3. last resort: any online key we have, regardless of mode
+    if CONFIG.get("openrouter_api_key"):
+        c = _ask_openrouter_raw(prompt, system)
+        if c and not c.startswith("__ERR__"):
+            return c
+        last = c or last
     if CONFIG.get("claude_api_key"):
         c = _ask_claude_raw(prompt, system)
         if c and not c.startswith("__ERR__"):
             return c
-    return out  # may be an __ERR__ string
+        last = c or last
+
+    return last  # an __ERR__ string -> upstream falls back to the offline brain
 
 
 def _ai_generate_code(description, filename):
@@ -1410,8 +1463,8 @@ def ai_brain(msg):
 def _ai_offline_hint(err=""):
     user = CONFIG.get("user_name", "P7")
     return ("Is baat ka jawab dene ke liye mera AI brain chahiye %s, jo abhi off hai. "
-            "Free me chalane ke liye Ollama install karke 'ollama serve' karo (model: "
-            "'ollama pull llama3'), ya config.json me apni claude_api_key daal do. "
+            "config.json me apni openrouter_api_key ya claude_api_key daal do (online), "
+            "ya Ollama install karke 'ollama serve' karo (free, local). "
             "Tab tak app kholna, gaana, screenshot, system info, time/date jaise "
             "commands chalte rahenge." % user)
 
@@ -1602,12 +1655,14 @@ def _ollama_online():
 def detect_capabilities():
     """Figure out what PHANTRON can actually do right now, so the user is never
     left guessing why something 'does nothing'."""
-    if CONFIG.get("claude_api_key"):
-        ai_ready, ai_detail = True, "Claude (cloud)"
+    if CONFIG.get("openrouter_api_key"):
+        ai_ready, ai_detail = True, "OpenRouter: " + CONFIG.get("openrouter_model", "")
+    elif CONFIG.get("claude_api_key"):
+        ai_ready, ai_detail = True, "Claude " + CONFIG.get("claude_model", "")
     elif _ollama_online():
         ai_ready, ai_detail = True, "Ollama %s" % CONFIG.get("ollama_model", "llama3")
     else:
-        ai_ready, ai_detail = False, "OFFLINE (set up Ollama or claude_api_key)"
+        ai_ready, ai_detail = False, "OFFLINE (set up OpenRouter/Claude key, ya Ollama)"
 
     return {
         "ai_ready": ai_ready,

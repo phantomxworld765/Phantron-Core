@@ -66,12 +66,31 @@ ke liye ek AI backend chahiye. Bina iske sirf hardcoded commands chalte hain.
 3. `pip install anthropic` (voice/vision install ke saath aa jaata hai, warna manually).
 4. Done — ab PHANTRON Opus 4.8 par chalega.
 
-> **Security:** Apni API key kisi ke saath share mat karna aur GitHub par push
-> mat karna. `config.json` ko private rakho. (Key kabhi code me hardcode na karein —
-> hamesha config.json me hi rahe.)
+### Option C — OpenRouter (RECOMMENDED: ek key, 400+ models incl. Opus 4.8)
 
-> **Fallback:** Agar Claude key na ho, PHANTRON khud Ollama try karega; wo bhi na ho
-> to **offline brain** (greetings, time, date, hisaab, app/gaana/screenshot) chalega.
+OpenRouter ek hi key se Claude, GPT, Llama, Gemini sab models deta hai. Koi extra
+`pip install` nahi chahiye (PHANTRON isse seedha HTTP se call karta hai).
+
+1. https://openrouter.ai → sign in → **Keys** → nayi key banao (`sk-or-v1-...`).
+   Credits add karo (kuch models free bhi hote hain, jaise `...:free` waale).
+2. `config.json` me:
+   ```json
+   "ai_mode": "openrouter",
+   "openrouter_api_key": "sk-or-v1-yahan-apni-key",
+   "openrouter_model": "anthropic/claude-opus-4.8"
+   ```
+3. Model badalna ho to `openrouter_model` change karo, jaise:
+   `openai/gpt-4o`, `meta-llama/llama-3.1-70b-instruct`, `google/gemini-2.0-flash`,
+   ya koi free model. (Poori list: https://openrouter.ai/models)
+4. Done — online OpenRouter, aur internet/ key na ho to apne-aap Ollama (offline) par chala jaayega.
+
+> **Security:** Apni API key kisi ke saath share mat karna aur GitHub par push
+> mat karna. `config.json` ab **gitignored** hai (push nahi hoti). Sirf
+> `config.example.json` template commit hota hai. Key kabhi code me hardcode na karein.
+
+> **Fallback:** Agar online key (OpenRouter/Claude) na ho, PHANTRON khud Ollama
+> try karega; wo bhi na ho to **offline brain** (greetings, time, date, hisaab,
+> app/gaana/screenshot) chalega.
 
 ---
 

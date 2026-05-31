@@ -40,8 +40,10 @@ multi-step tasks, and even refactors/auto-fixes its own code.
   parser so their arguments aren't hijacked by generic open/play matches.
 - **Safety first:** destructive shell commands are blocked in `agent_safe_mode`.
   Never bypass the OS lock screen (impossible + unsafe) — use `keep_awake` instead.
-- **AI access** is via `_ai_raw(prompt, system)`; it auto-selects Claude (if
-  `claude_api_key` set, model `claude-opus-4-8`) → Ollama → offline brain.
+- **AI access** is via `_ai_raw(prompt, system)`; it auto-selects the configured
+  online provider (OpenRouter `sk-or-...` or Claude `sk-ant-...`) → Ollama (local)
+  → built-in offline brain. Backends: `_ask_openrouter_raw`, `_ask_claude_raw`,
+  `_ask_ollama_raw`. OpenRouter is OpenAI-compatible (`/api/v1/chat/completions`).
 - New modules should be **decoupled** (dependency-injected) and have a `__main__`
   smoke test, like the existing ones.
 
