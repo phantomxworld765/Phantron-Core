@@ -3,461 +3,290 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PHANTRON v7 — P7 HEART CORE</title>
+<title>PHANTRON v7 — P7 CORE</title>
 <style>
   :root{
-    --bg:#02060e; --panel:rgba(8,18,34,.72); --panel2:rgba(6,14,28,.9);
-    --line:#123a5e; --line2:#0e2540;
+    --bg:#02060e; --panel:rgba(8,18,34,.72); --line:#123a5e; --line2:#0e2540;
     --cyan:#22d3ee; --cyan2:#38bdf8; --ice:#7dd3fc;
     --green:#34d399; --amber:#fbbf24; --red:#f87171; --pink:#f472b6;
     --txt:#cfe8ff; --dim:#5f86b3;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{
-    font-family:"Segoe UI",system-ui,Arial,sans-serif; color:var(--txt);
-    height:100vh; overflow:hidden;
-    background:
-      radial-gradient(1200px 700px at 50% 8%, #08213a 0%, transparent 60%),
-      radial-gradient(900px 500px at 12% 110%, #06283a 0%, transparent 55%),
-      radial-gradient(900px 500px at 88% 110%, #0a1f3a 0%, transparent 55%),
-      var(--bg);
-  }
-  /* animated background grid */
-  body::before{
-    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
-    background-image:
-      linear-gradient(rgba(34,211,238,.05) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(34,211,238,.05) 1px,transparent 1px);
-    background-size:46px 46px;
-    mask-image:radial-gradient(circle at 50% 45%,#000 0%,transparent 85%);
-    animation:gridmove 16s linear infinite;
-  }
-  @keyframes gridmove{from{background-position:0 0}to{background-position:46px 46px}}
+  body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:var(--txt);height:100vh;overflow:hidden;
+    background:radial-gradient(1200px 700px at 50% 8%,#08213a 0%,transparent 60%),
+      radial-gradient(900px 500px at 12% 110%,#06283a 0%,transparent 55%),var(--bg);}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(34,211,238,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,.045) 1px,transparent 1px);
+    background-size:48px 48px;mask-image:radial-gradient(circle at 50% 45%,#000 0%,transparent 85%);animation:gridmove 18s linear infinite;}
+  @keyframes gridmove{from{background-position:0 0}to{background-position:48px 48px}}
   .scanlines{position:fixed;inset:0;z-index:9998;pointer-events:none;
-    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.08) 3px,rgba(0,0,0,0) 4px);
-    mix-blend-mode:overlay;opacity:.5}
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.07) 3px,rgba(0,0,0,0) 4px);mix-blend-mode:overlay;opacity:.45}
 
   .grid{position:relative;z-index:1;display:grid;height:100vh;gap:10px;padding:10px;
-    grid-template-columns:320px 1fr 340px;
-    grid-template-rows:58px 1fr 104px;
+    grid-template-columns:290px 1fr 310px;grid-template-rows:56px 1fr 64px;
     grid-template-areas:"head head head" "left center right" "dock dock dock";}
 
-  /* ---------- header ---------- */
-  header{grid-area:head;display:flex;align-items:center;gap:14px;padding:0 18px;
-    background:linear-gradient(90deg,var(--panel),rgba(8,18,34,.4));
-    border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(8px);
-    clip-path:polygon(0 0,100% 0,100% 70%,98.5% 100%,0 100%)}
-  .orb{width:30px;height:30px;border-radius:50%;flex:none;
-    background:radial-gradient(circle at 30% 30%,var(--cyan),#0b6e8a 70%,#062c3a);
-    box-shadow:0 0 16px var(--cyan);animation:pulse 2.4s infinite}
+  header{grid-area:head;display:flex;align-items:center;gap:13px;padding:0 18px;
+    background:linear-gradient(90deg,var(--panel),rgba(8,18,34,.4));border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(8px)}
+  .orb{width:28px;height:28px;border-radius:50%;flex:none;background:radial-gradient(circle at 30% 30%,var(--cyan),#0b6e8a 70%,#062c3a);box-shadow:0 0 16px var(--cyan);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 10px var(--cyan)}50%{box-shadow:0 0 24px var(--cyan)}}
-  .brand h1{font-size:19px;letter-spacing:6px;font-weight:800;color:#eafdff;
-    text-shadow:0 0 10px var(--cyan),0 0 26px #0891b2;position:relative}
-  .brand h1::after{content:"PHANTRON";position:absolute;left:0;top:0;color:var(--pink);
-    clip-path:inset(0 0 55% 0);opacity:.45;animation:glitch 4s infinite steps(2)}
-  @keyframes glitch{0%,92%,100%{transform:translate(0,0)}93%{transform:translate(-2px,1px)}96%{transform:translate(2px,-1px)}}
+  .brand h1{font-size:18px;letter-spacing:6px;font-weight:800;color:#eafdff;text-shadow:0 0 10px var(--cyan),0 0 26px #0891b2}
   .brand small{color:var(--dim);letter-spacing:3px;font-size:10px}
-  .hstat{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--dim)}
+  .hstat{margin-left:auto;display:flex;align-items:center;gap:11px;font-size:11px;color:var(--dim)}
   .pill{padding:4px 11px;border:1px solid var(--line);border-radius:20px;font-weight:700;letter-spacing:1px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;margin-right:6px}
   .dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
   .clock{font-variant-numeric:tabular-nums;color:var(--cyan2);font-weight:700}
-  .ctrlbtn{width:34px;height:30px;border-radius:8px;background:#0c1c34;color:var(--cyan);
-    border:1px solid var(--line);font-size:15px;cursor:pointer;transition:.15s}
+  .ctrlbtn{width:34px;height:30px;border-radius:8px;background:#0c1c34;color:var(--cyan);border:1px solid var(--line);font-size:15px;cursor:pointer;transition:.15s}
   .ctrlbtn:hover{box-shadow:0 0 12px var(--cyan);border-color:var(--cyan)}
   .ctrlbtn.power{color:var(--red)} .ctrlbtn.power:hover{box-shadow:0 0 12px var(--red);border-color:var(--red)}
 
-  /* ---------- panels ---------- */
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    backdrop-filter:blur(7px);display:flex;flex-direction:column;overflow:hidden;position:relative}
-  .panel::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;
-    background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.6}
-  .ph{font-size:10.5px;letter-spacing:2.5px;color:var(--cyan2);padding:9px 13px;
-    border-bottom:1px solid var(--line2);text-transform:uppercase;display:flex;
-    justify-content:space-between;align-items:center}
-  .ph .tag{color:var(--dim);font-size:9px;letter-spacing:1px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(7px);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .panel::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.55}
+  .ph{font-size:10.5px;letter-spacing:2.5px;color:var(--cyan2);padding:9px 13px;border-bottom:1px solid var(--line2);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+  .ph .tag{color:var(--dim);font-size:9px}
   .col{display:flex;flex-direction:column;gap:10px;min-height:0}
   .left{grid-area:left} .right{grid-area:right} .center{grid-area:center}
 
-  /* ---------- gauges (left) ---------- */
-  .gauges{padding:12px;display:flex;flex-direction:column;gap:13px}
+  /* gauges */
+  .gauges{padding:12px;display:flex;flex-direction:column;gap:12px}
   .gauge{display:flex;align-items:center;gap:13px}
-  .ring{position:relative;width:64px;height:64px;flex:none}
+  .ring{position:relative;width:60px;height:60px;flex:none}
   .ring svg{transform:rotate(-90deg)}
-  .ring .v{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:13px;font-weight:800;color:var(--cyan)}
+  .ring .v{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--cyan)}
   .gmeta{font-size:11px;color:var(--dim)} .gmeta b{display:block;color:var(--txt);font-size:12px;letter-spacing:1px}
-  /* network + latency mini graphs */
-  .mini{padding:10px 12px;border-top:1px solid var(--line2)}
-  .mini h3{font-size:9.5px;letter-spacing:2px;color:var(--dim);margin-bottom:7px}
-  .bars{display:flex;align-items:flex-end;gap:2px;height:46px}
-  .bars i{flex:1;background:linear-gradient(to top,var(--cyan2),var(--cyan));border-radius:1px;transition:height .4s;min-height:2px}
-  .lat{display:flex;align-items:flex-end;gap:2px;height:34px}
-  .lat i{flex:1;background:var(--green);opacity:.7;border-radius:1px;transition:height .4s}
-  /* visual sensors */
-  #screen{width:100%;border-radius:8px;border:1px solid var(--line2);background:#02060c;aspect-ratio:16/9;object-fit:cover}
-  .noscreen{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;
-    border:1px dashed var(--line2);border-radius:8px;margin:0 12px 12px}
+  .mini{padding:9px 12px;border-top:1px solid var(--line2)}
+  .mini h3{font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:6px}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:40px}
+  .bars i{flex:1;background:linear-gradient(to top,var(--cyan2),var(--cyan));border-radius:1px;transition:height .5s;min-height:2px}
+  #screen{width:calc(100% - 20px);margin:10px;border-radius:8px;border:1px solid var(--line2);background:#02060c;aspect-ratio:16/9;object-fit:cover}
+  .noscreen{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;border:1px dashed var(--line2);border-radius:8px;margin:10px}
 
-  /* ---------- center / core ---------- */
-  .coreband{padding:12px;display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line2)}
-  .core{width:128px;height:128px;flex:none;position:relative}
+  /* center core (compact) */
+  .coreband{padding:11px 13px;display:flex;gap:13px;align-items:center;border-bottom:1px solid var(--line2)}
+  .core{width:84px;height:84px;flex:none;position:relative}
   .core .c-ring{position:absolute;border-radius:50%;border:1px solid rgba(34,211,238,.35)}
   .core .r1{inset:0;border-top-color:var(--cyan);border-right-color:var(--cyan);animation:spin 3.5s linear infinite}
-  .core .r2{inset:14px;border:1px dashed rgba(56,189,248,.4);animation:spin 5s linear infinite reverse}
-  .core .r3{inset:30px;border-top-color:var(--ice);animation:spin 2.2s linear infinite}
-  .core .heart{position:absolute;inset:44px;border-radius:50%;
-    background:radial-gradient(circle at 50% 45%,#bff4ff,var(--cyan) 45%,#0b5a72 75%,transparent);
-    box-shadow:0 0 30px var(--cyan),0 0 60px #0891b288;animation:beat 1.8s ease-in-out infinite}
+  .core .r2{inset:11px;border:1px dashed rgba(56,189,248,.4);animation:spin 5s linear infinite reverse}
+  .core .heart{position:absolute;inset:28px;border-radius:50%;background:radial-gradient(circle at 50% 45%,#bff4ff,var(--cyan) 45%,#0b5a72 75%,transparent);box-shadow:0 0 26px var(--cyan);animation:beat 1.8s ease-in-out infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes beat{0%,100%{transform:scale(.92);opacity:.85}50%{transform:scale(1.06);opacity:1}}
   .coreinfo{flex:1;min-width:0}
-  .coreinfo .ttl{font-size:11px;letter-spacing:2px;color:var(--cyan2)}
-  .coreinfo .sub{font-size:10px;color:var(--dim);margin:2px 0 8px}
-  .health{height:9px;border-radius:6px;background:#0a1a30;overflow:hidden;border:1px solid var(--line2)}
-  .health i{display:block;height:100%;width:60%;border-radius:6px;
-    background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .6s}
-  .readout{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:9px;font-size:10px;color:var(--dim)}
+  .coreinfo .ttl{font-size:10.5px;letter-spacing:2px;color:var(--cyan2)}
+  .coreinfo .sub{font-size:10px;color:var(--dim);margin:2px 0 7px}
+  .bar{height:8px;border-radius:6px;background:#0a1a30;overflow:hidden;border:1px solid var(--line2)}
+  .bar i{display:block;height:100%;width:60%;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .6s}
+  .readout{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:8px;font-size:10px;color:var(--dim)}
   .readout b{color:var(--ice);font-weight:700}
 
-  .chat{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
-  .msg{max-width:82%;padding:9px 13px;border-radius:12px;font-size:13.5px;line-height:1.5;
-    white-space:pre-wrap;word-break:break-word;animation:rise .25s ease}
+  /* CHAT — bada aur clean */
+  .chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:11px}
+  .msg{max-width:80%;padding:10px 14px;border-radius:13px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;animation:rise .25s ease}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .msg.user{align-self:flex-end;background:linear-gradient(135deg,#0e7490,#0369a1);color:#eaffff;border-bottom-right-radius:3px}
   .msg.ai{align-self:flex-start;background:#0a1830;border:1px solid var(--line2);border-bottom-left-radius:3px}
-  .msg.step{align-self:flex-start;background:#091428;border:1px dashed #21507a;color:var(--cyan2);font-size:12.5px}
-  .msg.sys{align-self:center;background:#06283a;color:var(--cyan);font-size:11.5px;letter-spacing:.5px;text-align:center}
+  .msg.step{align-self:flex-start;background:#091428;border:1px dashed #21507a;color:var(--cyan2);font-size:13px}
+  .msg.sys{align-self:center;background:#06283a;color:var(--cyan);font-size:11.5px;text-align:center}
   .msg .tag{font-size:9px;letter-spacing:1px;opacity:.6;display:block;margin-bottom:2px}
-  .typing{align-self:flex-start;display:flex;gap:5px;padding:11px 15px;background:#0a1830;border:1px solid var(--line2);border-radius:12px}
+  .typing{align-self:flex-start;display:flex;gap:5px;padding:11px 15px;background:#0a1830;border:1px solid var(--line2);border-radius:13px}
   .typing span{width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:blink 1.2s infinite}
   .typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
   @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
-
-  .voicebar{padding:8px 12px;border-top:1px solid var(--line2);display:flex;align-items:center;gap:10px}
+  .voicebar{padding:7px 13px;border-top:1px solid var(--line2);display:flex;align-items:center;gap:10px}
   .voicebar .lbl{font-size:9px;letter-spacing:1.5px;color:var(--dim);white-space:nowrap}
-  .wave{flex:1;display:flex;align-items:center;gap:2px;height:26px}
-  .wave i{flex:1;background:var(--cyan);border-radius:2px;height:4px;opacity:.45;transition:height .12s}
+  .wave{flex:1;display:flex;align-items:center;gap:2px;height:24px}
+  .wave i{flex:1;background:var(--cyan);border-radius:2px;height:4px;opacity:.4;transition:height .12s}
   .wave.live i{opacity:.95}
-  .inputbar{display:flex;gap:9px;padding:11px 12px;border-top:1px solid var(--line2)}
-  #txt{flex:1;background:#02080f;border:1px solid var(--line2);border-radius:10px;padding:12px 14px;color:var(--txt);font-size:13.5px;outline:none}
+  .inputbar{display:flex;gap:9px;padding:12px 13px;border-top:1px solid var(--line2)}
+  #txt{flex:1;background:#02080f;border:1px solid var(--line2);border-radius:10px;padding:13px 15px;color:var(--txt);font-size:14px;outline:none}
   #txt:focus{border-color:var(--cyan);box-shadow:0 0 0 2px #22d3ee22}
   button{cursor:pointer;border:none;border-radius:10px;font-size:13px;color:#001018;font-weight:800}
-  #send{padding:0 20px;background:linear-gradient(135deg,var(--cyan),#0ea5e9)}
+  #send{padding:0 22px;background:linear-gradient(135deg,var(--cyan),#0ea5e9)}
   #mic{width:48px;background:#0c1830;color:var(--cyan);border:1px solid var(--line2);font-size:18px}
   #mic.live{background:var(--red);color:#fff;box-shadow:0 0 16px var(--red);animation:pulse 1s infinite}
 
-  /* ---------- right / cybersecurity ---------- */
-  .sec{padding:11px 12px;border-bottom:1px solid var(--line2)}
-  .sec h3{font-size:9.5px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between}
-  .fw{display:flex;align-items:flex-end;gap:3px;height:40px}
-  .fw i{flex:1;background:linear-gradient(to top,#0e7490,var(--cyan));border-radius:1px;transition:height .5s;min-height:3px}
-  .matrix{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}
-  .matrix span{aspect-ratio:1;border-radius:2px;background:#0c2236;transition:background .3s}
-  .matrix span.on{background:var(--cyan);box-shadow:0 0 5px var(--cyan)}
-  .matrix span.warn{background:var(--amber)} .matrix span.bad{background:var(--red)}
-  .threat{height:10px;border-radius:6px;background:#0a1a30;overflow:hidden;border:1px solid var(--line2);margin-top:4px}
-  .threat i{display:block;height:100%;width:18%;background:linear-gradient(90deg,var(--green),var(--amber));border-radius:6px}
-  .log{padding:4px 10px;overflow-y:auto;flex:1}
-  .logitem{display:flex;gap:7px;padding:6px 3px;border-bottom:1px solid #0c1a2e;font-size:11px}
+  /* right: clean status + activity */
+  .statwrap{padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+  .statrow{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim)}
+  .statrow b{color:var(--ice);font-weight:700}
+  .log{padding:5px 11px;overflow-y:auto;flex:1}
+  .logitem{display:flex;gap:8px;padding:7px 3px;border-bottom:1px solid #0c1a2e;font-size:11.5px}
   .logitem .t{color:var(--dim);font-variant-numeric:tabular-nums;flex:none}
   .logitem .a{color:var(--txt)} .logitem .d{color:var(--dim);display:block;font-size:10px}
   .logitem.tool .a{color:var(--cyan2)} .logitem.done .a{color:var(--green)} .logitem.error .a{color:var(--red)}
 
-  /* ---------- bottom dock ---------- */
-  .dock{grid-area:dock;display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
-  .notif{overflow:hidden} .notif .body{padding:8px 12px;overflow-y:auto;font-size:11px;color:var(--cyan)}
-  .notif .body div{padding:3px 0;border-bottom:1px solid #0c1a2e}
-  .dockbtns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px}
-  .dbtn{background:#0a1830;border:1px solid var(--line);color:var(--cyan);border-radius:9px;
-    padding:9px;font-size:11px;letter-spacing:1px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;
-    clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+  .dock{grid-area:dock}
+  .dockbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;padding:10px 12px}
+  .dbtn{background:#0a1830;border:1px solid var(--line);color:var(--cyan);border-radius:9px;padding:10px;font-size:11px;letter-spacing:1px;font-weight:700}
   .dbtn:hover{box-shadow:0 0 12px var(--cyan);border-color:var(--cyan);background:#0c1f3a}
 
   ::-webkit-scrollbar{width:7px}::-webkit-scrollbar-thumb{background:#16304f;border-radius:8px}
-
-  /* paused state */
-  body.paused .center,body.paused .left,body.paused .right{filter:grayscale(.65) brightness(.7)}
-  #pausedBanner{position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:9999;display:none;
-    padding:7px 22px;border-radius:20px;background:#3a1d06;color:var(--amber);border:1px solid #b45309;
-    font-size:12px;letter-spacing:2px;box-shadow:0 0 20px #f59e0b55}
+  body.paused .center,body.paused .left,body.paused .right{filter:grayscale(.6) brightness(.72)}
+  #pausedBanner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:9999;display:none;padding:7px 22px;border-radius:20px;background:#3a1d06;color:var(--amber);border:1px solid #b45309;font-size:12px;letter-spacing:2px}
   body.paused #pausedBanner{display:block;animation:pulse 1.8s infinite}
-
-  /* boot */
-  #boot{position:fixed;inset:0;z-index:10000;background:#02050b;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:16px;transition:opacity .8s ease;font-family:Consolas,monospace}
+  #boot{position:fixed;inset:0;z-index:10000;background:#02050b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .8s ease;font-family:Consolas,monospace}
   #boot.gone{opacity:0;pointer-events:none}
-  #boot .bcore{width:120px;height:120px;border-radius:50%;position:relative;
-    background:radial-gradient(circle,var(--cyan),#06384a 60%,transparent 72%);
-    box-shadow:0 0 40px var(--cyan),inset 0 0 30px #000;animation:beat 1.6s infinite}
-  #boot .bcore::before{content:"";position:absolute;inset:-14px;border-radius:50%;border:1px solid rgba(34,211,238,.4);border-top-color:var(--cyan);animation:spin 2.2s linear infinite}
-  #boot h1{font-size:28px;letter-spacing:10px;color:#eafdff;text-shadow:0 0 16px var(--cyan)}
-  #bootlog{font-size:12px;color:var(--cyan2);letter-spacing:1px;min-height:66px;text-align:center;line-height:1.7}
+  #boot .bcore{width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,var(--cyan),#06384a 60%,transparent 72%);box-shadow:0 0 40px var(--cyan),inset 0 0 30px #000;animation:beat 1.6s infinite}
+  #boot h1{font-size:26px;letter-spacing:10px;color:#eafdff;text-shadow:0 0 16px var(--cyan)}
+  #bootlog{font-size:12px;color:var(--cyan2);min-height:62px;text-align:center;line-height:1.7}
   #bootlog .ok{color:var(--green)}
 </style>
 </head>
 <body>
-
-<div id="boot">
-  <div class="bcore"></div>
-  <h1>PHANTRON</h1>
-  <div id="bootlog"></div>
-</div>
+<div id="boot"><div class="bcore"></div><h1>PHANTRON</h1><div id="bootlog"></div></div>
 <div class="scanlines"></div>
 <div id="pausedBanner">⏸ PHANTRON PAUSED — "jaag jao" bolo ya ▶ dabao</div>
 
 <div class="grid">
-
-  <!-- HEADER -->
   <header>
     <div class="orb"></div>
-    <div class="brand"><h1>PHANTRON</h1><small>v7 · P7 HEART CORE</small></div>
+    <div class="brand"><h1>PHANTRON</h1><small>v7 · P7 CORE</small></div>
     <div class="hstat">
       <span class="pill"><span id="conn" class="dot"></span><span id="connTxt">CONNECTING…</span></span>
-      <span class="pill" id="aiStat" title="AI brain status">AI: —</span>
+      <span class="pill" id="aiStat">AI: —</span>
       <span class="pill" id="osInfo">—</span>
       <span class="clock" id="clock">--:--:--</span>
       <button id="pauseBtn" class="ctrlbtn" title="Pause / Resume">⏸</button>
-      <button id="powerBtn" class="ctrlbtn power" title="PHANTRON band karo">⏻</button>
+      <button id="powerBtn" class="ctrlbtn power" title="Band karo">⏻</button>
     </div>
   </header>
 
-  <!-- LEFT: SYSTEM DIAGNOSTICS -->
+  <!-- LEFT -->
   <div class="left col">
     <div class="panel" style="flex:none">
-      <div class="ph"><span>System Diagnostics</span><span class="tag">BEAST CORE</span></div>
+      <div class="ph"><span>System Diagnostics</span><span class="tag">LIVE</span></div>
       <div class="gauges">
-        <div class="gauge">
-          <div class="ring"><svg width="64" height="64"><circle cx="32" cy="32" r="27" stroke="#13243f" stroke-width="6" fill="none"/>
-            <circle id="cpuRing" cx="32" cy="32" r="27" stroke="#22d3ee" stroke-width="6" fill="none" stroke-dasharray="170" stroke-dashoffset="170" stroke-linecap="round"/></svg>
-            <div class="v" id="cpuVal">0%</div></div>
-          <div class="gmeta"><b>CPU LOAD</b>processor</div>
-        </div>
-        <div class="gauge">
-          <div class="ring"><svg width="64" height="64"><circle cx="32" cy="32" r="27" stroke="#13243f" stroke-width="6" fill="none"/>
-            <circle id="ramRing" cx="32" cy="32" r="27" stroke="#38bdf8" stroke-width="6" fill="none" stroke-dasharray="170" stroke-dashoffset="170" stroke-linecap="round"/></svg>
-            <div class="v" id="ramVal">0%</div></div>
-          <div class="gmeta"><b>RAM ALLOC</b><span id="ramTxt">— / —</span></div>
-        </div>
-        <div class="gauge">
-          <div class="ring"><svg width="64" height="64"><circle cx="32" cy="32" r="27" stroke="#13243f" stroke-width="6" fill="none"/>
-            <circle id="batRing" cx="32" cy="32" r="27" stroke="#34d399" stroke-width="6" fill="none" stroke-dasharray="170" stroke-dashoffset="170" stroke-linecap="round"/></svg>
-            <div class="v" id="batVal">—</div></div>
-          <div class="gmeta"><b>BATTERY</b><span id="batTxt">—</span></div>
-        </div>
+        <div class="gauge"><div class="ring"><svg width="60" height="60"><circle cx="30" cy="30" r="25" stroke="#13243f" stroke-width="6" fill="none"/><circle id="cpuRing" cx="30" cy="30" r="25" stroke="#22d3ee" stroke-width="6" fill="none" stroke-dasharray="157" stroke-dashoffset="157" stroke-linecap="round"/></svg><div class="v" id="cpuVal">0%</div></div><div class="gmeta"><b>CPU LOAD</b>processor</div></div>
+        <div class="gauge"><div class="ring"><svg width="60" height="60"><circle cx="30" cy="30" r="25" stroke="#13243f" stroke-width="6" fill="none"/><circle id="ramRing" cx="30" cy="30" r="25" stroke="#38bdf8" stroke-width="6" fill="none" stroke-dasharray="157" stroke-dashoffset="157" stroke-linecap="round"/></svg><div class="v" id="ramVal">0%</div></div><div class="gmeta"><b>RAM</b><span id="ramTxt">— / —</span></div></div>
+        <div class="gauge"><div class="ring"><svg width="60" height="60"><circle cx="30" cy="30" r="25" stroke="#13243f" stroke-width="6" fill="none"/><circle id="batRing" cx="30" cy="30" r="25" stroke="#34d399" stroke-width="6" fill="none" stroke-dasharray="157" stroke-dashoffset="157" stroke-linecap="round"/></svg><div class="v" id="batVal">—</div></div><div class="gmeta"><b>BATTERY</b><span id="batTxt">—</span></div></div>
       </div>
-      <div class="mini"><h3>NETWORK TRAFFIC</h3><div class="bars" id="netBars"></div></div>
-      <div class="mini"><h3>OS LATENCY</h3><div class="lat" id="latBars"></div></div>
+      <div class="mini"><h3>NETWORK ACTIVITY</h3><div class="bars" id="netBars"></div></div>
     </div>
     <div class="panel" style="flex:1">
       <div class="ph"><span>Visual Sensors</span><span class="tag" id="visTag">FEED</span></div>
       <div class="noscreen" id="noscreen">screen feed waiting…</div>
-      <img id="screen" style="display:none;margin:10px" alt="live screen">
+      <img id="screen" style="display:none" alt="live screen">
     </div>
   </div>
 
-  <!-- CENTER: OPERATING CORE / HUD -->
+  <!-- CENTER -->
   <div class="center panel">
-    <div class="ph"><span>Operating Core / HUD</span><span class="tag" id="voiceTag">PHANTRON LISTENING · P7</span></div>
+    <div class="ph"><span>Operating Core</span><span class="tag" id="voiceTag">LISTENING · P7</span></div>
     <div class="coreband">
-      <div class="core"><div class="c-ring r1"></div><div class="c-ring r2"></div><div class="c-ring r3"></div><div class="heart"></div></div>
+      <div class="core"><div class="c-ring r1"></div><div class="c-ring r2"></div><div class="heart"></div></div>
       <div class="coreinfo">
         <div class="ttl">SYSTEM HEALTH</div>
-        <div class="sub" id="coreSub">Beast core · operational</div>
-        <div class="health"><i id="healthBar"></i></div>
-        <div class="readout">
-          <span>CORE LOAD <b id="roCpu">0%</b></span>
-          <span>MEM <b id="roRam">—</b></span>
-          <span>OS <b id="roOs">—</b></span>
-          <span>STATUS <b id="roState">ACTIVE</b></span>
-        </div>
+        <div class="sub">Beast core · operational</div>
+        <div class="bar"><i id="healthBar"></i></div>
+        <div class="readout"><span>CPU <b id="roCpu">0%</b></span><span>MEM <b id="roRam">—</b></span><span>OS <b id="roOs">—</b></span><span>STATUS <b id="roState">ACTIVE</b></span></div>
       </div>
     </div>
     <div class="chat" id="chat"></div>
-    <div class="voicebar">
-      <span class="lbl">VOICE COGNITION</span>
-      <div class="wave" id="wave"></div>
-    </div>
+    <div class="voicebar"><span class="lbl">VOICE</span><div class="wave" id="wave"></div></div>
     <div class="inputbar">
-      <input id="txt" placeholder="P7, command type karo… (ya mic dabao)" autocomplete="off">
+      <input id="txt" placeholder="P7, command type karo… (ya 🎙 dabao)" autocomplete="off">
       <button id="mic" title="Bolo">🎙</button>
       <button id="send">SEND</button>
     </div>
   </div>
 
-  <!-- RIGHT: CYBERSECURITY CORE -->
+  <!-- RIGHT (clean: status + activity) -->
   <div class="right col">
     <div class="panel" style="flex:none">
-      <div class="ph"><span>Cybersecurity Core</span><span class="tag">SECURE</span></div>
-      <div class="sec"><h3><span>FIREWALL STATUS</span><span id="fwNum">12</span></h3><div class="fw" id="fwBars"></div></div>
-      <div class="sec"><h3>CYBERSECURITY MATRIX</h3><div class="matrix" id="matrix"></div></div>
-      <div class="sec"><h3><span>INTRUSION THREAT LEVEL</span><span id="threatTxt">LOW</span></h3><div class="threat"><i id="threatBar"></i></div></div>
+      <div class="ph"><span>Status</span><span class="tag">CORE</span></div>
+      <div class="statwrap">
+        <div class="statrow"><span>AI Brain</span><b id="sAi">—</b></div>
+        <div class="statrow"><span>Connection</span><b id="sConn">—</b></div>
+        <div class="statrow"><span>System Health</span><b id="sHealth">—</b></div>
+        <div class="statrow"><span>Mode</span><b id="sMode">ACTIVE</b></div>
+      </div>
     </div>
     <div class="panel" style="flex:1">
-      <div class="ph"><span>Secure Tunnels / Activity</span><span class="tag">LIVE</span></div>
+      <div class="ph"><span>Activity Log</span><span class="tag">LIVE</span></div>
       <div class="log" id="log"></div>
     </div>
   </div>
 
-  <!-- BOTTOM DOCK -->
-  <div class="dock">
-    <div class="panel notif">
-      <div class="ph"><span>Notifications</span><span class="tag">OS ALERTS</span></div>
-      <div class="body" id="notif"></div>
-    </div>
-    <div class="panel">
-      <div class="ph"><span>Operational Control Dock</span></div>
-      <div class="dockbtns">
-        <button class="dbtn" data-cmd="system info">⚙ SYSTEM INFO</button>
-        <button class="dbtn" data-cmd="screenshot lo">📸 SCREENSHOT</button>
-        <button class="dbtn" data-cmd="screen me kya hai">👁 VISUAL SENSORS</button>
-        <button class="dbtn" data-cmd="security audit">🛡 SECURITY SCAN</button>
-      </div>
+  <!-- DOCK -->
+  <div class="dock panel">
+    <div class="dockbtns">
+      <button class="dbtn" data-cmd="system info">⚙ SYSTEM INFO</button>
+      <button class="dbtn" data-cmd="screenshot lo">📸 SCREENSHOT</button>
+      <button class="dbtn" data-cmd="screen me kya hai">👁 VISUAL SENSORS</button>
+      <button class="dbtn" data-cmd="security audit">🛡 SECURITY SCAN</button>
     </div>
   </div>
-
 </div>
 
 <script>
-const WS_URL = "ws://localhost:8765";
-const $ = id => document.getElementById(id);
-const C = 2 * Math.PI * 27;
-let ws, reconnectTimer, typingEl = null, paused = false, speaking = false;
+const WS_URL="ws://localhost:8765";
+const $=id=>document.getElementById(id);
+const C=2*Math.PI*25;
+let ws,reconnectTimer,typingEl=null,paused=false,speaking=false;
 
-/* ---------- boot ---------- */
-let bootDone = false;
-function runBoot(){
-  const lines = [
-    "[ ok ] Phantron heart core initialising…",
-    "[ ok ] Vision module… <span class='ok'>online</span>",
-    "[ ok ] Autonomous core… <span class='ok'>online</span>",
-    "[ ok ] Keyboard / mouse I/O… <span class='ok'>linked</span>",
-    "[ ok ] Synchronizing secure tunnels…",
-  ];
-  const box = $("bootlog"); let i = 0;
-  (function n(){ if(i<lines.length){ box.innerHTML += lines[i++]+"<br>"; setTimeout(n,340);} })();
-}
-function hideBoot(){ if(bootDone) return; bootDone = true; const b=$("boot"); if(b){b.classList.add("gone");setTimeout(()=>b.remove(),900);} }
-runBoot(); setTimeout(hideBoot, 5200);
+let bootDone=false;
+function runBoot(){const lines=["[ ok ] Phantron core initialising…","[ ok ] Vision module… <span class='ok'>online</span>","[ ok ] Autonomous core… <span class='ok'>online</span>","[ ok ] Keyboard / mouse I/O… <span class='ok'>linked</span>","[ ok ] Connecting neural link…"];const box=$("bootlog");let i=0;(function n(){if(i<lines.length){box.innerHTML+=lines[i++]+"<br>";setTimeout(n,340);}})();}
+function hideBoot(){if(bootDone)return;bootDone=true;const b=$("boot");if(b){b.classList.add("gone");setTimeout(()=>b.remove(),900);}}
+runBoot();setTimeout(hideBoot,5200);
 
-/* ---------- websocket ---------- */
-function connect(){
-  ws = new WebSocket(WS_URL);
-  ws.onopen = () => setConn(true);
-  ws.onclose = () => { setConn(false); clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 1500); };
-  ws.onerror = () => ws.close();
-  ws.onmessage = e => handle(JSON.parse(e.data));
-}
-function setConn(on){
-  $("conn").classList.toggle("on", on);
-  $("connTxt").textContent = on ? "ONLINE" : "OFFLINE — retry…";
-  if(on) hideBoot();
-}
-function handle(m){
-  switch(m.type){
-    case "system":        addMsg(m.message,"sys"); pushNotif(m.message); break;
-    case "user_message":  addMsg(m.message,"user",m.source); break;
-    case "ai_response":   removeTyping(); addMsg(m.message,"ai"); speakPulse(); break;
-    case "ai_step":       removeTyping(); addMsg(m.message,"step","step "+(m.step||"")); showTyping(); break;
-    case "thinking":      m.state ? showTyping() : removeTyping(); break;
-    case "metrics":       updateMetrics(m); break;
-    case "screen_update": updateScreen(m.img); break;
-    case "activity_update": updateLog(m.log); break;
-    case "capabilities":  updateCaps(m); break;
-    case "state":         updateState(m); break;
-  }
-}
+function connect(){ws=new WebSocket(WS_URL);ws.onopen=()=>setConn(true);ws.onclose=()=>{setConn(false);clearTimeout(reconnectTimer);reconnectTimer=setTimeout(connect,1500);};ws.onerror=()=>ws.close();ws.onmessage=e=>handle(JSON.parse(e.data));}
+function setConn(on){$("conn").classList.toggle("on",on);$("connTxt").textContent=on?"ONLINE":"OFFLINE — retry…";$("sConn").textContent=on?"ONLINE":"OFFLINE";$("sConn").style.color=on?"var(--green)":"var(--red)";if(on)hideBoot();}
+function handle(m){switch(m.type){
+  case "system":addMsg(m.message,"sys");break;
+  case "user_message":addMsg(m.message,"user",m.source);break;
+  case "ai_response":removeTyping();addMsg(m.message,"ai");speakPulse();break;
+  case "ai_step":removeTyping();addMsg(m.message,"step","step "+(m.step||""));showTyping();break;
+  case "thinking":m.state?showTyping():removeTyping();break;
+  case "metrics":updateMetrics(m);break;
+  case "screen_update":updateScreen(m.img);break;
+  case "activity_update":updateLog(m.log);break;
+  case "capabilities":updateCaps(m);break;
+  case "state":updateState(m);break;
+}}
+function addMsg(t,cls,tag){const d=document.createElement("div");d.className="msg "+cls;if(tag){const s=document.createElement("span");s.className="tag";s.textContent=tag.toUpperCase();d.appendChild(s);}d.appendChild(document.createTextNode(t));$("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight;}
+function showTyping(){if(typingEl)return;typingEl=document.createElement("div");typingEl.className="typing";typingEl.innerHTML="<span></span><span></span><span></span>";$("chat").appendChild(typingEl);$("chat").scrollTop=$("chat").scrollHeight;}
+function removeTyping(){if(typingEl){typingEl.remove();typingEl=null;}}
+function send(){const v=$("txt").value.trim();if(!v||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({message:v,source:"interface"}));$("txt").value="";}
+$("send").onclick=send;$("txt").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+document.querySelectorAll(".dbtn").forEach(b=>b.onclick=()=>{if(!ws||ws.readyState!==1)return;ws.send(JSON.stringify({message:b.dataset.cmd,source:"interface"}));});
 
-/* ---------- chat ---------- */
-function addMsg(text, cls, tag){
-  const d=document.createElement("div"); d.className="msg "+cls;
-  if(tag){const t=document.createElement("span");t.className="tag";t.textContent=tag.toUpperCase();d.appendChild(t);}
-  d.appendChild(document.createTextNode(text));
-  $("chat").appendChild(d); $("chat").scrollTop=$("chat").scrollHeight;
-}
-function showTyping(){ if(typingEl)return; typingEl=document.createElement("div"); typingEl.className="typing";
-  typingEl.innerHTML="<span></span><span></span><span></span>"; $("chat").appendChild(typingEl); $("chat").scrollTop=$("chat").scrollHeight; }
-function removeTyping(){ if(typingEl){typingEl.remove();typingEl=null;} }
-
-/* ---------- send ---------- */
-function send(){ const v=$("txt").value.trim(); if(!v||!ws||ws.readyState!==1)return;
-  ws.send(JSON.stringify({message:v,source:"interface"})); $("txt").value=""; }
-$("send").onclick=send;
-$("txt").addEventListener("keydown",e=>{ if(e.key==="Enter")send(); });
-document.querySelectorAll(".dbtn").forEach(b=>b.onclick=()=>{
-  if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({message:b.dataset.cmd,source:"interface"})); });
-
-/* ---------- metrics ---------- */
-function ring(el,pct){ $(el).style.strokeDashoffset = C*(1-Math.max(0,Math.min(100,pct))/100); }
+function ring(el,p){$(el).style.strokeDashoffset=C*(1-Math.max(0,Math.min(100,p))/100);}
 function updateMetrics(m){
-  ring("cpuRing",m.cpu); $("cpuVal").textContent=Math.round(m.cpu)+"%";
-  ring("ramRing",m.ram); $("ramVal").textContent=Math.round(m.ram)+"%";
+  ring("cpuRing",m.cpu);$("cpuVal").textContent=Math.round(m.cpu)+"%";
+  ring("ramRing",m.ram);$("ramVal").textContent=Math.round(m.ram)+"%";
   $("ramTxt").textContent=(m.ram_used||"—")+" / "+(m.ram_total||"—");
-  ring("batRing",m.battery); $("batVal").textContent=Math.round(m.battery)+"%";
+  ring("batRing",m.battery);$("batVal").textContent=Math.round(m.battery)+"%";
   $("batTxt").textContent=m.charging?"Charging ⚡":"On battery";
-  $("osInfo").textContent=m.os||""; $("roOs").textContent=m.os||"—";
-  $("roCpu").textContent=Math.round(m.cpu)+"%"; $("roRam").textContent=m.ram_used||"—";
-  const health=Math.max(4,100-Math.round((m.cpu*0.6+m.ram*0.4)));
-  $("healthBar").style.width=health+"%";
-  $("healthBar").style.background = health>55?"linear-gradient(90deg,#34d399,#22d3ee)":health>25?"linear-gradient(90deg,#fbbf24,#22d3ee)":"linear-gradient(90deg,#f87171,#fbbf24)";
+  $("osInfo").textContent=m.os||"";$("roOs").textContent=m.os||"—";$("roCpu").textContent=Math.round(m.cpu)+"%";$("roRam").textContent=m.ram_used||"—";
+  const h=Math.max(4,100-Math.round(m.cpu*0.6+m.ram*0.4));
+  $("healthBar").style.width=h+"%";$("sHealth").textContent=h+"%";
+  $("healthBar").style.background=h>55?"linear-gradient(90deg,#34d399,#22d3ee)":h>25?"linear-gradient(90deg,#fbbf24,#22d3ee)":"linear-gradient(90deg,#f87171,#fbbf24)";
 }
-/* ---------- screen ---------- */
-function updateScreen(b64){ if(!b64)return; const img=$("screen"); img.src="data:image/jpeg;base64,"+b64;
-  img.style.display="block"; $("noscreen").style.display="none"; $("visTag").textContent="● LIVE"; }
-/* ---------- activity ---------- */
-function updateLog(items){ if(!items)return; const box=$("log"); box.innerHTML="";
-  items.forEach(it=>{ const r=document.createElement("div"); r.className="logitem "+(it.type||"info");
-    r.innerHTML=`<span class="t">${it.time||""}</span><span class="a">${esc(it.action||"")}${it.detail?`<span class="d">${esc(it.detail)}</span>`:""}</span>`;
-    box.appendChild(r); }); }
-function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
-function pushNotif(t){ const b=$("notif"); const d=document.createElement("div");
-  d.textContent="[OS] "+t; b.prepend(d); while(b.children.length>12)b.lastChild.remove(); }
-
-/* ---------- AI status ---------- */
-function updateCaps(m){ const el=$("aiStat");
-  if(m.ai_online){ el.textContent="AI: ONLINE"; el.style.color="var(--green)"; el.title=(m.caps&&m.caps.ai_detail)||""; }
-  else{ el.textContent="AI: OFFLINE"; el.style.color="var(--red)"; el.title="AI off — OpenRouter/Claude key ya Ollama lagao"; } }
-
-/* ---------- on/off/pause ---------- */
-function updateState(m){ paused=!!m.paused; document.body.classList.toggle("paused",paused);
-  const b=$("pauseBtn"); b.textContent=paused?"▶":"⏸"; b.title=paused?"Resume":"Pause";
-  $("roState").textContent=paused?"PAUSED":"ACTIVE";
-  if(m.online===false){ setConn(false); $("connTxt").textContent="OFFLINE — band"; $("roState").textContent="OFFLINE"; } }
-function sendControl(a){ if(!ws||ws.readyState!==1){alert("PHANTRON se connection nahi hai.");return;} ws.send(JSON.stringify({type:"control",action:a})); }
+function updateScreen(b64){if(!b64)return;const i=$("screen");i.src="data:image/jpeg;base64,"+b64;i.style.display="block";$("noscreen").style.display="none";$("visTag").textContent="● LIVE";}
+function updateLog(items){if(!items)return;const box=$("log");box.innerHTML="";items.forEach(it=>{const r=document.createElement("div");r.className="logitem "+(it.type||"info");r.innerHTML=`<span class="t">${it.time||""}</span><span class="a">${esc(it.action||"")}${it.detail?`<span class="d">${esc(it.detail)}</span>`:""}</span>`;box.appendChild(r);});}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function updateCaps(m){const el=$("aiStat");if(m.ai_online){el.textContent="AI: ONLINE";el.style.color="var(--green)";$("sAi").textContent="ONLINE";$("sAi").style.color="var(--green)";}else{el.textContent="AI: OFFLINE";el.style.color="var(--red)";$("sAi").textContent="OFFLINE";$("sAi").style.color="var(--red)";}}
+function updateState(m){paused=!!m.paused;document.body.classList.toggle("paused",paused);const b=$("pauseBtn");b.textContent=paused?"▶":"⏸";b.title=paused?"Resume":"Pause";$("roState").textContent=paused?"PAUSED":"ACTIVE";$("sMode").textContent=paused?"PAUSED":"ACTIVE";if(m.online===false){setConn(false);$("sMode").textContent="OFFLINE";}}
+function sendControl(a){if(!ws||ws.readyState!==1){alert("PHANTRON se connection nahi hai.");return;}ws.send(JSON.stringify({type:"control",action:a}));}
 $("pauseBtn").onclick=()=>sendControl(paused?"resume":"pause");
-$("powerBtn").onclick=()=>{ if(confirm("PHANTRON ko poori tarah band karein? (Wapas chalu: run_phantron.bat)")) sendControl("shutdown"); };
+$("powerBtn").onclick=()=>{if(confirm("PHANTRON ko band karein? (Wapas: run_phantron.bat)"))sendControl("shutdown");};
+setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString();},1000);
 
-/* ---------- clock ---------- */
-setInterval(()=>{ $("clock").textContent=new Date().toLocaleTimeString(); },1000);
+const wave=$("wave");for(let i=0;i<30;i++){wave.appendChild(document.createElement("i"));}
+for(let i=0;i<26;i++){$("netBars").appendChild(document.createElement("i"));}
+setInterval(()=>{[...$("netBars").children].forEach(b=>b.style.height=(6+Math.random()*32)+"px");},1000);
+setInterval(()=>{const live=wave.classList.contains("live")||speaking;[...wave.children].forEach(b=>b.style.height=(live?(5+Math.random()*20):(3+Math.random()*4))+"px");},120);
+function speakPulse(){speaking=true;setTimeout(()=>speaking=false,2200);}
 
-/* ---------- decorative HUD animations ---------- */
-function fill(el,n,cls){ for(let i=0;i<n;i++){const e=document.createElement(cls);el.appendChild(e);} }
-fill($("netBars"),28,"i"); fill($("latBars"),26,"i"); fill($("fwBars"),24,"i");
-for(let i=0;i<96;i++){ const s=document.createElement("span"); $("matrix").appendChild(s); }
-const wave=$("wave"); fill(wave,32,"i");
-setInterval(()=>{
-  [...$("netBars").children].forEach(b=>b.style.height=(8+Math.random()*38)+"px");
-  [...$("latBars").children].forEach(b=>b.style.height=(4+Math.random()*28)+"px");
-  [...$("fwBars").children].forEach(b=>b.style.height=(6+Math.random()*32)+"px");
-},900);
-const cells=[...$("matrix").children];
-setInterval(()=>{ cells.forEach(c=>{ const r=Math.random(); c.className=""; if(r>0.94)c.classList.add("bad"); else if(r>0.86)c.classList.add("warn"); else if(r>0.55)c.classList.add("on"); }); },700);
-/* voice waveform: tall when mic live or PHANTRON speaking */
-setInterval(()=>{ const live=wave.classList.contains("live")||speaking;
-  [...wave.children].forEach(b=>b.style.height=(live?(5+Math.random()*22):(3+Math.random()*5))+"px"); },110);
-function speakPulse(){ speaking=true; setTimeout(()=>speaking=false,2200); }
-
-/* ---------- browser mic ---------- */
-const mic=$("mic"); let recog=null, listening=false;
+const mic=$("mic");let recog=null,listening=false;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(SR){
-  recog=new SR(); recog.lang="hi-IN"; recog.interimResults=false;
-  recog.onresult=e=>{ $("txt").value=e.results[0][0].transcript; send(); };
-  recog.onend=()=>{ listening=false; mic.classList.remove("live"); wave.classList.remove("live"); };
-  recog.onerror=()=>{ listening=false; mic.classList.remove("live"); wave.classList.remove("live"); };
-  mic.onclick=()=>{ if(listening){recog.stop();return;} try{recog.start();listening=true;mic.classList.add("live");wave.classList.add("live");}catch(_){} };
-}else{ mic.title="Is browser me mic support nahi"; mic.onclick=()=>alert("Chrome/Edge use karo, ya Python voice se bolo."); }
+if(SR){recog=new SR();recog.lang="hi-IN";recog.interimResults=false;
+  recog.onresult=e=>{$("txt").value=e.results[0][0].transcript;send();};
+  recog.onend=()=>{listening=false;mic.classList.remove("live");wave.classList.remove("live");};
+  recog.onerror=()=>{listening=false;mic.classList.remove("live");wave.classList.remove("live");};
+  mic.onclick=()=>{if(listening){recog.stop();return;}try{recog.start();listening=true;mic.classList.add("live");wave.classList.add("live");}catch(_){}};
+}else{mic.title="Browser mic support nahi";mic.onclick=()=>alert("Chrome/Edge use karo ya Python voice se bolo.");}
 
 connect();
 </script>
