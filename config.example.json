@@ -1,9 +1,17 @@
 {
-  "ai_mode": "ollama",
+  "_comment": "TEMPLATE. Copy this to config.json and paste your OWN keys. config.json is gitignored so your keys never get pushed.",
+
+  "ai_mode": "openrouter",
+  "openrouter_api_key": "",
+  "openrouter_model": "anthropic/claude-opus-4.8",
+  "openrouter_url": "https://openrouter.ai/api/v1/chat/completions",
+
   "claude_api_key": "",
-  "claude_model": "claude-haiku-4-5-20251001",
+  "claude_model": "claude-opus-4-8",
+
   "ollama_model": "llama3",
   "ollama_url": "http://localhost:11434/api/generate",
+
   "ws_port": 8765,
   "user_name": "P7",
   "assistant_name": "PHANTRON",
@@ -32,5 +40,15 @@
   "agent_safe_mode": true,
   "agent_allow_shutdown": false,
   "unreal_engine_dir": "",
-  "android_sdk_dir": ""
+  "android_sdk_dir": "",
+
+  "keep_awake": false,
+  "app_open_wait": 6,
+  "apps": {
+    "unreal": {"type": "path", "target": ""},
+    "maya": {"type": "path", "target": ""},
+    "photoshop": {"type": "path", "target": ""},
+    "android studio": {"type": "path", "target": ""},
+    "blender": {"type": "path", "target": ""}
+  }
 }

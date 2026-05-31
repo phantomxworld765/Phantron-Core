@@ -46,6 +46,18 @@ if errorlevel 1 (
     echo         PHANTRON text aur interface se poori tarah chalega. Mic baad me laga sakte ho.
 )
 
+REM --- VISION dependencies (OPTIONAL). For OCR/click-by-text/autonomous eyes. ---
+echo.
+echo [SETUP] Vision dependencies install kar raha hoon (optional - autonomous "eyes")...
+pip install -r requirements-vision.txt
+if errorlevel 1 (
+    echo [WARN]  Vision packages install nahi hue. Screen capture phir bhi chalega;
+    echo         OCR/click-by-text ke liye baad me requirements-vision.txt install karna.
+) else (
+    echo [INFO]  OCR ke liye Tesseract-OCR engine bhi chahiye:
+    echo         https://github.com/UB-Mannheim/tesseract/wiki  ^(PATH me add karo^)
+)
+
 REM --- Tell the user about the AI brain status ---
 echo.
 echo [INFO] AI BRAIN: PHANTRON ko sochne ke liye ek backend chahiye.

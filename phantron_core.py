@@ -55,6 +55,9 @@ DEFAULT = {
     "ai_mode": "ollama",
     "claude_api_key": "",
     "claude_model": "claude-haiku-4-5-20251001",
+    "openrouter_api_key": "",
+    "openrouter_model": "anthropic/claude-opus-4.8",
+    "openrouter_url": "https://openrouter.ai/api/v1/chat/completions",
     "ollama_model": "llama3",
     "ollama_url": "http://localhost:11434/api/generate",
     "ws_port": 8765,
@@ -102,6 +105,16 @@ def load_config():
 
 
 CONFIG = load_config()
+
+
+def save_config():
+    """Persist the current CONFIG back to config.json (keeps the user's keys)."""
+    try:
+        json.dump(CONFIG, open(CONFIG_FILE, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print("[CONFIG] save fail:", e)
+        return False
 
 
 def projects_dir():
@@ -648,10 +661,421 @@ def do_security_audit(arg=""):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  VISION  +  AUTONOMOUS AGENT  +  CODE DOCTOR  (the multimodal core)
+# ════════════════════════════════════════════════════════════════════════════
+_vision_engine = None
+
+
+def vision():
+    """Lazy singleton VisionEngine, or None if the module is unavailable."""
+    global _vision_engine
+    if _vision_engine is None:
+        try:
+            from phantron_vision import VisionEngine
+            _vision_engine = VisionEngine(config=CONFIG)
+        except Exception:
+            _vision_engine = False
+    return _vision_engine or None
+
+
+def do_describe_screen():
+    """Computer-vision: describe what is currently on screen."""
+    log("Vision", "describe screen", "tool")
+    v = vision()
+    if not v:
+        return "Vision module load nahi hua. 'pip install pyautogui Pillow' (aur OCR ke liye pytesseract)."
+    send_screen()
+    return v.describe(ai_fn=_ai_raw)
+
+
+def do_read_screen():
+    """Computer-vision: OCR the screen and return the raw text."""
+    log("Vision", "read screen (OCR)", "tool")
+    v = vision()
+    if not v:
+        return "Vision module load nahi hua P7."
+    txt = v.read_text()
+    if txt == "__NO_OCR__":
+        return "OCR off hai. 'pip install pytesseract' + Tesseract-OCR engine install karo P7."
+    if not txt or txt.startswith("__"):
+        return "Screen par readable text nahi mila."
+    return "Screen par ye text hai P7:\n" + " ".join(txt.split())[:1500]
+
+
+def do_click_text(target):
+    """Computer-vision: find on-screen text/button and click it."""
+    target = (target or "").strip().strip("'\"")
+    if not target:
+        return "Kis text par click karun P7?"
+    log("Vision click", target, "tool")
+    v = vision()
+    if not v:
+        return "Click-by-text ke liye vision chahiye (pip install pyautogui pytesseract)."
+    hits = v.find_text(target)
+    if not hits:
+        return "Screen par '%s' nahi mila P7." % target
+    best = hits[0]
+    res = do_mouse("click", best["cx"], best["cy"])
+    return "'%s' par click kiya P7 (%d,%d). %s" % (target, best["cx"], best["cy"], res)
+
+
+def do_auto_task(goal):
+    """Run the fully autonomous, vision-grounded perceive->think->act loop."""
+    goal = (goal or "").strip()
+    if not goal:
+        return "Konsa autonomous goal du P7?"
+    log("Autonomous", goal[:60], "tool")
+    try:
+        from phantron_autonomous import AutonomousAgent
+    except Exception as e:
+        return "Autonomous core load nahi hua: " + str(e)
+
+    def _on_event(etype, data):
+        msg = data.get("message") or ""
+        if etype in ("goal", "step_start", "step_result", "blocked", "done", "fixing"):
+            log("auto:" + etype, msg, "error" if etype == "blocked" else "info")
+        if _server_ref and msg:
+            _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[auto] " + msg})
+
+    try:
+        agent = AutonomousAgent(config=CONFIG, ai_fn=_ai_raw, executor=execute_action,
+                                vision=vision(), on_event=_on_event)
+        report = agent.run(goal)
+        head = "Goal complete P7. " if report.get("ok") else "Goal adhura P7. "
+        return head + (report.get("summary") or "")
+    except Exception as e:
+        return "Autonomous error: " + str(e)
+
+
+def _code_doctor():
+    try:
+        from phantron_codedoctor import CodeDoctor
+
+        def _on_event(etype, data):
+            msg = data.get("message") or ""
+            if msg:
+                log("doctor:" + etype, msg, "info")
+                if _server_ref:
+                    _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[doctor] " + msg})
+
+        return CodeDoctor(config=CONFIG, ai_fn=_ai_raw, on_event=_on_event)
+    except Exception:
+        return None
+
+
+def do_code_analyze(path):
+    log("Code analyze", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.analyze_summary(path)
+
+
+def do_code_fix(path, error=""):
+    log("Code fix", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.auto_fix(path, error)
+
+
+def do_refactor(path, goal=""):
+    log("Refactor", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.refactor(path, goal)
+
+
+def do_self_heal(command):
+    log("Self-heal", str(command)[:60], "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    rep = doc.self_heal(command)
+    return rep.get("summary", "Self-heal done.")
+
+
+# ── APP CONTROL + SKILLS (WhatsApp / YouTube / any registered app) ──────────
+_app_ctrl = None
+_skills = None
+
+
+def app_controller():
+    global _app_ctrl
+    if _app_ctrl is None:
+        try:
+            from phantron_apps import AppController
+            _app_ctrl = AppController(config=CONFIG)
+        except Exception:
+            _app_ctrl = False
+    return _app_ctrl or None
+
+
+def skills():
+    global _skills
+    if _skills is None:
+        try:
+            from phantron_skills import Skills
+            _skills = Skills(config=CONFIG, apps=app_controller(), vision=vision())
+        except Exception:
+            _skills = False
+    return _skills or None
+
+
+def do_app(name):
+    """Launch any registered/known application by friendly name."""
+    log("App", name, "tool")
+    ac = app_controller()
+    if not ac:
+        return do_open(name)  # fall back to the basic opener
+    return ac.launch(name)
+
+
+def do_whatsapp_send(contact, message):
+    log("WhatsApp", "%s: %s" % (contact, str(message)[:40]), "tool")
+    s = skills()
+    return s.whatsapp_send(contact, message) if s else "Skills load nahi hue P7."
+
+
+def do_whatsapp_read(contact=None):
+    log("WhatsApp read", contact or "current", "tool")
+    s = skills()
+    return s.whatsapp_read(contact) if s else "Skills load nahi hue P7."
+
+
+def do_youtube(action, query=""):
+    log("YouTube", action + (" " + query if query else ""), "tool")
+    s = skills()
+    if not s:
+        return "Skills load nahi hue P7."
+    return {
+        "search": lambda: s.youtube_search(query),
+        "play": lambda: s.youtube_play(query),
+        "skip_ad": s.youtube_skip_ad,
+        "next": s.youtube_next,
+        "prev": s.youtube_prev,
+        "pause": s.youtube_pause,
+        "fullscreen": s.youtube_fullscreen,
+    }.get(action, lambda: "YouTube action samajh nahi aaya P7.")()
+
+
+# ── DEEP APP AUTOMATION (script/CLI driven: blender, android, ffmpeg, python) ──
+_macro_engine = None
+
+
+def macro_engine():
+    global _macro_engine
+    if _macro_engine is None:
+        try:
+            from phantron_macros import MacroEngine
+
+            def _on_event(etype, data):
+                msg = data.get("message") or ""
+                if msg:
+                    log("macro:" + etype, msg, "info")
+                    if _server_ref:
+                        _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[macro] " + msg})
+
+            _macro_engine = MacroEngine(config=CONFIG, ai_fn=_ai_raw, on_event=_on_event)
+        except Exception:
+            _macro_engine = False
+    return _macro_engine or None
+
+
+def do_macro(app, instruction=""):
+    log("Macro", "%s: %s" % (app, str(instruction)[:50]), "tool")
+    eng = macro_engine()
+    if not eng:
+        return "Deep automation engine load nahi hua P7."
+    return eng.run(app, instruction)
+
+
+# ── MODEL SWITCH + STATUS (runtime, no config editing needed) ───────────────
+MODEL_MAP = {
+    "opus": "anthropic/claude-opus-4.8",
+    "sonnet": "anthropic/claude-sonnet-4.6",
+    "haiku": "anthropic/claude-haiku-4.5",
+    "qwen": "qwen/qwen-2.5-72b-instruct",
+    "deepseek": "deepseek/deepseek-chat",
+    "llama": "meta-llama/llama-3.3-70b-instruct",
+    "gemini": "google/gemini-2.0-flash-001",
+    "gpt": "openai/gpt-4o",
+    "free": "deepseek/deepseek-chat-v3:free",
+}
+
+
+def _model_switch_intent(msg):
+    """Detect 'X use karo / switch to X' for a known model. Returns key or None."""
+    t = (msg or "").lower()
+    verb = bool(re.search(r"\b(use\s*kar|switch|laga|badlo|chala|pe\s+(aa|chal|switch)|par\s+chal)\b", t)
+                or "use karo" in t)
+    if not verb:
+        return None
+    if "free model" in t or "free wala" in t:
+        return "free"
+    if any(x in t for x in ["ollama", "local model", "offline model"]):
+        return "ollama"
+    for k in ["opus", "sonnet", "haiku", "qwen", "deepseek", "llama", "gemini", "gpt"]:
+        if k in t:
+            return k
+    return None
+
+
+def _refresh_caps():
+    global CAPABILITIES
+    try:
+        CAPABILITIES = detect_capabilities()
+        if _server_ref:
+            _server_ref.broadcast_threadsafe({"type": "capabilities", "caps": CAPABILITIES,
+                                              "ai_online": bool(CAPABILITIES.get("ai_ready"))})
+    except Exception:
+        pass
+
+
+def do_model_list():
+    cur = CONFIG.get("openrouter_model") if CONFIG.get("ai_mode") == "openrouter" else CONFIG.get("ai_mode")
+    return ("Available models P7 (bolo 'X use karo'):\n"
+            "- opus / sonnet / haiku  (Claude via OpenRouter)\n"
+            "- qwen / deepseek / llama / gemini / gpt\n"
+            "- 'free model'  (sasta/free)\n"
+            "- 'ollama'  (local, free, offline)\n"
+            "Abhi chal raha hai: " + str(cur))
+
+
+def do_switch_model(target):
+    log("Model switch", target, "tool")
+    t = (target or "").lower().strip()
+    if any(x in t for x in ["ollama", "local", "offline"]):
+        CONFIG["ai_mode"] = "ollama"
+        save_config()
+        _refresh_caps()
+        return "Ab Ollama (local, free) brain use karunga P7. (Ollama chal raha ho ye check karna.)"
+    key = None
+    for k in MODEL_MAP:
+        if k in t:
+            key = k
+            break
+    if not key:
+        return do_model_list()
+    if not CONFIG.get("openrouter_api_key"):
+        return ("'%s' ke liye OpenRouter key chahiye P7 (config.json -> openrouter_api_key). "
+                "Ya 'ollama use karo' bolo (free)." % key)
+    CONFIG["ai_mode"] = "openrouter"
+    CONFIG["openrouter_model"] = MODEL_MAP[key]
+    save_config()
+    _refresh_caps()
+    return "Ab brain '%s' (%s) par switch kar diya P7." % (key, MODEL_MAP[key])
+
+
+def do_status():
+    """PHANTRON ka self-check - kya kaam kar raha hai, kya nahi."""
+    log("Status", "self-check", "tool")
+    caps = detect_capabilities()
+    lines = capability_summary(caps)
+    fixes = []
+    if not caps.get("ai_ready"):
+        fixes.append("AI brain OFF - OpenRouter key ya Ollama lagao.")
+    if not caps.get("automation"):
+        fixes.append("pyautogui missing - app/mouse/screenshot off (pip install -r requirements.txt).")
+    if not caps.get("metrics"):
+        fixes.append("psutil missing - gauges off.")
+    out = "PHANTRON STATUS P7:\n" + "\n".join(lines)
+    if fixes:
+        out += "\n\nTheek karna hai:\n- " + "\n- ".join(fixes)
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  FAST LOCAL PARSER  (instant, no AI cost)
 # ════════════════════════════════════════════════════════════════════════════
 def parse_and_execute(msg):
     ml = msg.lower().strip()
+
+    # ── HIGH-PRIORITY EXPLICIT COMMANDS (checked first so their arguments,
+    #    which may contain words like "kholo"/"likho", aren't hijacked) ──
+
+    # AUTONOMOUS MULTIMODAL TASK (vision-grounded perceive->think->act)
+    m = re.search(r"^\s*(?:auto|autonomous|agent\s*mode|khud\s+(?:se\s+)?karo)\b[:\-]?\s*(.+)", msg, re.I)
+    if m and len(m.group(1).strip()) > 2:
+        return do_auto_task(m.group(1).strip()), True
+
+    # CODE DOCTOR: analyze / fix / refactor a source file
+    m = re.search(r"(?:analyze|analyse|check)\s+(?:code\s+|file\s+)?(\S+\.\w+)", msg, re.I)
+    if m:
+        return do_code_analyze(m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:auto[\s-]*fix|bug\s*fix|fix\s+bug\s+in|theek\s+kar(?:o|do)?)\s+(\S+\.\w+)", msg, re.I)
+    if m:
+        return do_code_fix(m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:refactor|saaf\s+kar(?:o|do)?)\s+(\S+\.\w+)\s*(?:taaki|so\s+that|:)?\s*(.*)$", msg, re.I)
+    if m:
+        return do_refactor(m.group(1).strip().strip("'\""), (m.group(2) or "").strip()), True
+
+    # ── MODEL list / switch  &  STATUS / self-check ──
+    if re.search(r"\bmodel", ml) and re.search(r"\b(list|kaun\s*se|kon\s*se|available|kya\s*kya)\b", ml):
+        return do_model_list(), True
+    _mt = _model_switch_intent(msg)
+    if _mt:
+        return do_switch_model(_mt), True
+    if any(x in ml for x in ["self check", "self-check", "diagnose", "status batao", "system status",
+                             "phantron status", "health check", "kya kya kaam kar", "capability"]):
+        return do_status(), True
+
+    # ── DEEP APP AUTOMATION (script/CLI driven: blender/android/ffmpeg/python) ──
+    m = re.search(r"blender\s+(?:me|mein|par|pe)\s+(.+)", msg, re.I)
+    if m:
+        return do_macro("blender", m.group(1).strip()), True
+    m = re.search(r"android\s+(?:studio\s+)?build\s*(.*)$", msg, re.I)
+    if m:
+        return do_macro("android", m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:ffmpeg|teaser\s+banao|video\s+(?:edit|convert|trim|compress|banao))\s*[:\-]?\s*(.*)$", msg, re.I)
+    if m and m.group(1).strip():
+        return do_macro("ffmpeg", m.group(1).strip()), True
+    m = re.search(r"python\s+(?:script\s+)?(?:banao|likho|bana\s+do)\s+(.+)", msg, re.I)
+    if m:
+        return do_macro("python", m.group(1).strip()), True
+
+    # ── WHATSAPP ──
+    m = re.search(r"whatsapp\s*(?:pe|par|me|se)?\s*(.+?)\s+ko\s+(.+?)\s+(?:bhejo|bhej\s*do|send\s*kar(?:o|do)?|likho|likh\s*do)\b", msg, re.I)
+    if not m:
+        m = re.search(r"(.+?)\s+ko\s+whatsapp\s*(?:pe|par)?\s+(.+?)\s+(?:bhejo|bhej\s*do|send\s*kar(?:o|do)?)\b", msg, re.I)
+    if m:
+        return do_whatsapp_send(m.group(1).strip().strip("'\""), m.group(2).strip().strip("'\"")), True
+    m = re.search(r"whatsapp\s*(?:pe|par)?\s*(.+?)\s+(?:ki|ke)\s+(?:chat|message|msg)\s+(?:padho|read|dikhao)", msg, re.I)
+    if m:
+        return do_whatsapp_read(m.group(1).strip().strip("'\"")), True
+    if re.search(r"whatsapp\s+(?:chat\s+)?(?:padho|read|dikhao)", ml):
+        return do_whatsapp_read(), True
+
+    # ── YOUTUBE controls ──
+    if re.search(r"\b(?:skip\s*ad|ad\s*skip|skip\s*ads|advertisement\s*skip)\b", ml):
+        return do_youtube("skip_ad"), True
+    if re.search(r"\b(?:next\s+video|agla\s+video|video\s+next|aage\s+wala\s+video)\b", ml):
+        return do_youtube("next"), True
+    if re.search(r"\b(?:pichla\s+video|previous\s+video|prev\s+video)\b", ml):
+        return do_youtube("prev"), True
+    if re.search(r"\b(?:video\s+(?:pause|rok)|youtube\s+pause)\b", ml):
+        return do_youtube("pause"), True
+    if re.search(r"\b(?:full\s*screen|fullscreen)\b", ml):
+        return do_youtube("fullscreen"), True
+    m = re.search(r"youtube\s*(?:pe|par|me)\s+(.+?)\s+(?:search\s*kar(?:o|do)?|dhundo|khojo)\b", msg, re.I)
+    if m:
+        return do_youtube("search", m.group(1).strip().strip("'\"")), True
+    m = re.search(r"youtube\s*(?:pe|par|me)\s+(.+?)\s+(?:chalao|play\s*kar(?:o|do)?|laga(?:o|do)?)\b", msg, re.I)
+    if m:
+        return do_youtube("play", m.group(1).strip().strip("'\"")), True
+
+    # ── OPEN a known/registered app  ("whatsapp kholo", "open blender") ──
+    m = re.search(r"^\s*(?:open|launch|start)\s+(.+)$", msg, re.I)
+    if not m:
+        m = re.search(r"(.+?)\s+(?:kholo|khol\s*do|chalu\s*kar(?:o|do)?|start\s*kar(?:o|do)?)\s*$", msg, re.I)
+    if m:
+        _name = m.group(1).strip().strip("'\"")
+        _ac = app_controller()
+        if _ac and _name:
+            _canon, _spec = _ac.resolve(_name)
+            if _spec is not None:
+                return do_app(_name), True   # known app -> rich launcher
 
     # ── PLAY SONG ──
     for pat in [
@@ -702,16 +1126,33 @@ def parse_and_execute(msg):
     if any(x in ml for x in ["screenshot", "screen shot", "screen capture", "screen ki photo"]):
         return do_screenshot(), True
 
+    # ── VISION: read / describe the screen ──
+    if any(x in ml for x in ["screen padho", "read screen", "screen ka text", "screen read",
+                             "screen text padho"]):
+        return do_read_screen(), True
+    if any(x in ml for x in ["screen me kya", "screen pe kya", "screen par kya", "describe screen",
+                             "screen dekho", "kya dikh raha", "screen describe", "screen analyze",
+                             "what's on screen", "whats on screen", "screen samjho"]):
+        return do_describe_screen(), True
+
     # ── SEARCH ──
     m = re.search(r"(?:search\s+kar(?:o|do)?|dhundo|dhundho|khojo|google\s+kar(?:o|do)?)\s+(.+)", ml)
     if m:
         return do_web_search(m.group(1).strip()), True
 
-    # ── MOUSE ──
-    if "click" in ml or "click karo" in ml:
+    # ── MOUSE / CLICK  (coordinates OR vision click-by-text) ──
+    if "click" in ml:
         nums = re.findall(r"\d+", ml)
         if len(nums) >= 2:
             return do_mouse("click", int(nums[0]), int(nums[1])), True
+        # vision: "<text> par click karo"  /  "click on <text>"
+        m = re.search(r"(.+?)\s+(?:par|pe|button\s+par|wale\s+par)\s+click\s+kar(?:o|do)?", ml)
+        if not m:
+            m = re.search(r"click\s+(?:kar(?:o|do)?\s+)?(?:on\s+|the\s+)?(.+)$", ml)
+        if m:
+            tgt = m.group(1).strip().strip("'\"")
+            if tgt and tgt not in ("karo", "kar do", "here", "yahan", "yaha"):
+                return do_click_text(tgt), True
         return do_mouse("click"), True
     if re.search(r"scroll\s+up|upar\s+scroll", ml):
         return do_mouse("scroll_up"), True
@@ -790,6 +1231,18 @@ ACTION_SYSTEM = (
     "system audit, RAM free karna) - ye khud sub-steps banata hai aur error khud fix karta hai\n"
     "- security_audit {{target}}: defensive security scan (network sockets, process integrity, "
     "log analysis) - access log file ka path bhi de sakte ho\n"
+    "- read_screen {{}} | describe_screen {{}}: screen ko vision/OCR se padho ya samjho\n"
+    "- click_text {{text}}: screen par dikh raha button/text dhundh kar click karo (coordinates ki zaroorat nahi)\n"
+    "- auto_task {{goal}}: vision-grounded autonomous multi-step task - khud screen dekh kar poora karo\n"
+    "- code_analyze {{path}} | code_fix {{path, error}} | refactor {{path, goal}}: apne hi codebase ko "
+    "analyze/fix/refactor karo (auto backup + compile-check ke saath)\n"
+    "- app {{name}}: koi bhi app kholo (whatsapp, youtube, vscode, blender, word, excel, camera, ...)\n"
+    "- whatsapp_send {{contact, message}} | whatsapp_read {{contact}}: WhatsApp Desktop par message bhejo/padho\n"
+    "- youtube {{action, query}}: action = search/play/skip_ad/next/prev/pause/fullscreen\n"
+    "- macro {{app, instruction}}: DEEP automation - app=blender (bpy script), android (gradle build), "
+    "ffmpeg (video/teaser), python (script generate+run)\n"
+    "- switch_model {{target}}: AI brain badlo (opus/sonnet/haiku/qwen/deepseek/llama/gemini/gpt/free/ollama)\n"
+    "- status {{}}: PHANTRON ka self-check (kya kaam kar raha hai)\n"
     "Hamesha Hindi me. SIRF valid JSON output karo, aur kuch mat likho."
 )
 
@@ -839,21 +1292,71 @@ def _ask_claude_raw(prompt, system):
         return "__ERR__ Claude: " + str(e)[:80]
 
 
+def _ask_openrouter_raw(prompt, system):
+    """OpenRouter is OpenAI-compatible and proxies 400+ models (incl. Opus 4.8)
+    through one key. Pure-stdlib HTTP, so no extra pip install needed."""
+    key = CONFIG.get("openrouter_api_key")
+    if not key:
+        return None
+    try:
+        resp = _http_post_json(
+            CONFIG.get("openrouter_url", DEFAULT["openrouter_url"]),
+            {"model": CONFIG.get("openrouter_model", DEFAULT["openrouter_model"]),
+             "messages": [{"role": "system", "content": system},
+                          {"role": "user", "content": prompt}],
+             "max_tokens": 600,
+             "temperature": 0.6},
+            timeout=60,
+            headers={"Authorization": "Bearer " + key,
+                     "HTTP-Referer": "https://github.com/phantomxworld765/Phantron-Core",
+                     "X-Title": "PHANTRON"})
+        if resp.get("error"):
+            return "__ERR__ OpenRouter: " + str(resp["error"])[:80]
+        choices = resp.get("choices") or []
+        if choices:
+            return ((choices[0].get("message") or {}).get("content") or "").strip()
+        return ""
+    except Exception as e:
+        return "__ERR__ OpenRouter: " + str(e)[:80]
+
+
 def _ai_raw(prompt, system):
-    """Pick the configured backend; fall back gracefully."""
-    if CONFIG.get("ai_mode") == "claude" and CONFIG.get("claude_api_key"):
+    """Pick the configured backend; fall back gracefully:
+    configured ONLINE provider -> local Ollama -> any other online key -> offline."""
+    mode = CONFIG.get("ai_mode")
+    last = ""
+
+    # 1. the ONLINE provider chosen in config
+    if mode == "openrouter" and CONFIG.get("openrouter_api_key"):
+        out = _ask_openrouter_raw(prompt, system)
+        if out and not out.startswith("__ERR__"):
+            return out
+        last = out or last
+    if mode == "claude" and CONFIG.get("claude_api_key"):
         out = _ask_claude_raw(prompt, system)
         if out and not out.startswith("__ERR__"):
             return out
+        last = out or last
+
+    # 2. local Ollama (free / offline)
     out = _ask_ollama_raw(prompt, system)
     if out and not out.startswith("__ERR__"):
         return out
-    # last resort: try claude even if not primary
+    last = out or last
+
+    # 3. last resort: any online key we have, regardless of mode
+    if CONFIG.get("openrouter_api_key"):
+        c = _ask_openrouter_raw(prompt, system)
+        if c and not c.startswith("__ERR__"):
+            return c
+        last = c or last
     if CONFIG.get("claude_api_key"):
         c = _ask_claude_raw(prompt, system)
         if c and not c.startswith("__ERR__"):
             return c
-    return out  # may be an __ERR__ string
+        last = c or last
+
+    return last  # an __ERR__ string -> upstream falls back to the offline brain
 
 
 def _ai_generate_code(description, filename):
@@ -920,6 +1423,25 @@ _ACTION_DISPATCH = {
     "scaffold": lambda a: do_scaffold_project(a.get("kind", ""), a.get("name", "")),
     "os_agent": lambda a: do_os_agent(a.get("task") or a.get("goal") or a.get("text", "")),
     "security_audit": lambda a: do_security_audit(a.get("target") or a.get("log") or a.get("text", "")),
+    "read_screen": lambda a: do_read_screen(),
+    "describe_screen": lambda a: do_describe_screen(),
+    "click_text": lambda a: do_click_text(a.get("text") or a.get("target") or a.get("query", "")),
+    "auto_task": lambda a: do_auto_task(a.get("goal") or a.get("task") or a.get("text", "")),
+    "code_analyze": lambda a: do_code_analyze(a.get("path") or a.get("file", "")),
+    "code_fix": lambda a: do_code_fix(a.get("path") or a.get("file", ""), a.get("error", "")),
+    "refactor": lambda a: do_refactor(a.get("path") or a.get("file", ""),
+                                      a.get("goal") or a.get("instruction", "")),
+    "self_heal": lambda a: do_self_heal(a.get("command") or a.get("cmd", "")),
+    "app": lambda a: do_app(a.get("name") or a.get("target") or a.get("app", "")),
+    "whatsapp_send": lambda a: do_whatsapp_send(a.get("contact") or a.get("to", ""),
+                                                a.get("message") or a.get("text", "")),
+    "whatsapp_read": lambda a: do_whatsapp_read(a.get("contact") or a.get("to")),
+    "youtube": lambda a: do_youtube(a.get("action", "search"),
+                                    a.get("query") or a.get("song") or a.get("text", "")),
+    "macro": lambda a: do_macro(a.get("app") or a.get("name", ""),
+                                a.get("instruction") or a.get("task") or a.get("text", "")),
+    "switch_model": lambda a: do_switch_model(a.get("target") or a.get("model") or a.get("text", "")),
+    "status": lambda a: do_status(),
 }
 
 
@@ -1060,8 +1582,8 @@ def ai_brain(msg):
 def _ai_offline_hint(err=""):
     user = CONFIG.get("user_name", "P7")
     return ("Is baat ka jawab dene ke liye mera AI brain chahiye %s, jo abhi off hai. "
-            "Free me chalane ke liye Ollama install karke 'ollama serve' karo (model: "
-            "'ollama pull llama3'), ya config.json me apni claude_api_key daal do. "
+            "config.json me apni openrouter_api_key ya claude_api_key daal do (online), "
+            "ya Ollama install karke 'ollama serve' karo (free, local). "
             "Tab tak app kholna, gaana, screenshot, system info, time/date jaise "
             "commands chalte rahenge." % user)
 
@@ -1252,18 +1774,22 @@ def _ollama_online():
 def detect_capabilities():
     """Figure out what PHANTRON can actually do right now, so the user is never
     left guessing why something 'does nothing'."""
-    if CONFIG.get("claude_api_key"):
-        ai_ready, ai_detail = True, "Claude (cloud)"
+    if CONFIG.get("openrouter_api_key"):
+        ai_ready, ai_detail = True, "OpenRouter: " + CONFIG.get("openrouter_model", "")
+    elif CONFIG.get("claude_api_key"):
+        ai_ready, ai_detail = True, "Claude " + CONFIG.get("claude_model", "")
     elif _ollama_online():
         ai_ready, ai_detail = True, "Ollama %s" % CONFIG.get("ollama_model", "llama3")
     else:
-        ai_ready, ai_detail = False, "OFFLINE (set up Ollama or claude_api_key)"
+        ai_ready, ai_detail = False, "OFFLINE (set up OpenRouter/Claude key, ya Ollama)"
 
     return {
         "ai_ready": ai_ready,
         "ai_detail": ai_detail,
         "metrics": _module_present("psutil"),       # CPU/RAM/battery gauges
         "automation": _module_present("pyautogui"),  # mouse/keyboard/screenshot/screen
+        "vision_ocr": _module_present("pytesseract"),  # read screen text / click-by-text
+        "vision_match": _module_present("cv2"),        # robust image template matching
         "voice_out": (_module_present("pyttsx3") or _module_present("win32com")
                       or _module_present("edge_tts")),
         "voice_in": _module_present("speech_recognition"),
@@ -1280,6 +1806,7 @@ def capability_summary(caps):
         "  AI brain   : %s  (%s)" % (mark(caps["ai_ready"]), caps["ai_detail"]),
         "  Metrics    : %s  (psutil - CPU/RAM/battery gauges)" % mark(caps["metrics"]),
         "  Automation : %s  (pyautogui - mouse/keyboard/screenshot/live screen)" % mark(caps["automation"]),
+        "  Vision OCR : %s  (pytesseract - read screen text / click-by-text)" % mark(caps.get("vision_ocr")),
         "  Voice out  : %s  (spoken replies)" % mark(caps["voice_out"]),
         "  Voice in   : %s  (microphone)" % mark(caps["voice_in"]),
     ]
@@ -1298,6 +1825,49 @@ def capability_interface_note(caps):
     if not parts:
         return "Sab systems ONLINE. Bataiye kya karna hai %s." % CONFIG.get("user_name", "P7")
     return " ".join(parts)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MANUAL ON / OFF / PAUSE  (safety control)
+# ════════════════════════════════════════════════════════════════════════════
+PAUSED = False  # when True, PHANTRON ignores commands until resumed
+
+
+def _control_intent(msg):
+    """Detect a manual control command. Returns 'pause' | 'resume' | 'shutdown'
+    | None. Kept precise so normal commands like 'music band karo' are NOT
+    treated as a shutdown."""
+    t = (msg or "").lower().strip()
+    if re.search(r"\b(wake up|resume|wakeup)\b", t) or any(w in t for w in
+            ["jaag jao", "jag jao", "shuru ho jao", "active ho jao", "wapas aa",
+             "chalu ho jao", "uth jao", "kaam shuru"]):
+        return "resume"
+    if re.search(r"\b(pause|sleep|standby)\b", t) or any(w in t for w in
+            ["so jao", "ruk jao", "thoda ruk", "chup ho jao", "aram karo", "ruk ja"]):
+        return "pause"
+    if re.search(r"\b(shutdown|shut down|exit|quit|turn off|power off)\b", t) or any(w in t for w in
+            ["band ho ja", "band ho jao", "khud ko band", "phantron band", "apne aap band",
+             "system band", "off ho ja", "so jao hamesha", "bye phantron"]):
+        return "shutdown"
+    return None
+
+
+PID_FILE = Path(__file__).parent / "phantron.pid"
+
+
+def _write_pid_file():
+    try:
+        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _remove_pid_file():
+    try:
+        if PID_FILE.exists():
+            PID_FILE.unlink()
+    except Exception:
+        pass
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1335,6 +1905,21 @@ class PhantronServer:
         return await self.loop.run_in_executor(None, self.process_sync, msg)
 
     async def _respond(self, msg, source="user"):
+        global PAUSED
+        # ---- manual control commands take top priority (safety) ----
+        intent = _control_intent(msg)
+        if intent:
+            await self.broadcast({"type": "user_message", "message": msg, "source": source})
+            await self.apply_control(intent)
+            return intent
+        # ---- if paused, ignore everything except a resume command ----
+        if PAUSED:
+            await self.broadcast({"type": "user_message", "message": msg, "source": source})
+            note = ("Main abhi PAUSED hoon P7. 'jaag jao' / 'wake up' bolo ya interface "
+                    "ka resume button dabao, tab kaam karunga.")
+            await self.broadcast({"type": "ai_response", "message": note})
+            return note
+
         await self.broadcast({"type": "user_message", "message": msg, "source": source})
         await self.broadcast({"type": "thinking", "state": True})
         log("Command", msg[:60], "info")
@@ -1347,6 +1932,38 @@ class PhantronServer:
         await self.broadcast({"type": "activity_update", "log": activity_log[:15]})
         speak(resp)
         return resp
+
+    # ---- manual ON/OFF/PAUSE control (interface buttons, voice, text) ----
+    async def apply_control(self, action):
+        global PAUSED
+        action = (action or "").lower().strip()
+        if action == "resume":
+            PAUSED = False
+            log("Control", "RESUME", "done")
+            await self.broadcast({"type": "state", "paused": False, "online": True})
+            msg = "PHANTRON wapas ACTIVE hai P7. Boliye."
+            await self.broadcast({"type": "ai_response", "message": msg})
+            speak(msg)
+        elif action == "pause":
+            PAUSED = True
+            log("Control", "PAUSE", "info")
+            await self.broadcast({"type": "state", "paused": True, "online": True})
+            msg = "PHANTRON PAUSED P7. Main kuch nahi karunga jab tak 'jaag jao' na bolo."
+            await self.broadcast({"type": "ai_response", "message": msg})
+            speak(msg)
+        elif action == "shutdown":
+            log("Control", "SHUTDOWN", "error")
+            await self.broadcast({"type": "ai_response", "message": "Theek hai P7, main band ho raha hoon. Bye!"})
+            await self.broadcast({"type": "state", "paused": False, "online": False})
+            speak("Theek hai P7, main band ho raha hoon. Bye!")
+            self._schedule_shutdown()
+
+    def _schedule_shutdown(self):
+        def _bye():
+            time.sleep(1.2)   # let the goodbye message + speech go out
+            _remove_pid_file()
+            os._exit(0)
+        threading.Thread(target=_bye, daemon=True).start()
 
     # ---- websocket handler (path optional for version compatibility) ----
     async def handle(self, ws, path=None):
@@ -1363,6 +1980,7 @@ class PhantronServer:
             "caps": CAPABILITIES,
             "ai_online": bool(CAPABILITIES.get("ai_ready")),
         }, ensure_ascii=False))
+        await ws.send(json.dumps({"type": "state", "paused": PAUSED, "online": True}, ensure_ascii=False))
         await ws.send(json.dumps({
             "type": "system",
             "message": capability_interface_note(CAPABILITIES),
@@ -1373,6 +1991,9 @@ class PhantronServer:
                 try:
                     d = json.loads(raw)
                 except Exception:
+                    continue
+                if d.get("type") == "control":
+                    await self.apply_control(d.get("action", ""))
                     continue
                 msg = (d.get("message") or "").strip()
                 if not msg:
@@ -1421,6 +2042,20 @@ class PhantronServer:
                 pass
             await asyncio.sleep(interval)
 
+    async def keepawake_loop(self):
+        """Keep the machine awake for 24/7 operation (prevents idle sleep/lock).
+        NOTE: this only stops INACTIVITY lock. It cannot unlock an already
+        locked screen - that is an OS security boundary by design."""
+        interval = max(30, int(CONFIG.get("keep_awake_interval_sec", 60)))
+        while True:
+            try:
+                s = skills()
+                if s:
+                    await self.loop.run_in_executor(None, s.keep_awake_tick)
+            except Exception:
+                pass
+            await asyncio.sleep(interval)
+
     # ---- terminal + voice input ----
     def start_console_input(self):
         def _loop():
@@ -1437,6 +2072,7 @@ class PhantronServer:
                     continue
                 if line.lower() in ("exit", "quit", "band karo"):
                     print("[PHANTRON] Bye P7.")
+                    _remove_pid_file()
                     os._exit(0)
                 asyncio.run_coroutine_threadsafe(self._respond(line, source="console"), self.loop)
         threading.Thread(target=_loop, daemon=True).start()
@@ -1451,6 +2087,7 @@ class PhantronServer:
         _server_ref = self
         self.loop = asyncio.get_running_loop()
         port = CONFIG.get("ws_port", 8765)
+        _write_pid_file()  # so stop_phantron.bat can shut it down from outside
 
         global CAPABILITIES
         CAPABILITIES = detect_capabilities()
@@ -1478,6 +2115,8 @@ class PhantronServer:
 
         asyncio.create_task(self.metrics_loop())
         asyncio.create_task(self.screen_loop())
+        if CONFIG.get("keep_awake"):
+            asyncio.create_task(self.keepawake_loop())
         self.start_console_input()
         start_wake_loop(self.voice_callback)
 
@@ -1513,6 +2152,8 @@ def main():
             input("Enter dabao band karne ke liye...")
         except Exception:
             pass
+    finally:
+        _remove_pid_file()
 
 
 if __name__ == "__main__":
