@@ -648,10 +648,165 @@ def do_security_audit(arg=""):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  VISION  +  AUTONOMOUS AGENT  +  CODE DOCTOR  (the multimodal core)
+# ════════════════════════════════════════════════════════════════════════════
+_vision_engine = None
+
+
+def vision():
+    """Lazy singleton VisionEngine, or None if the module is unavailable."""
+    global _vision_engine
+    if _vision_engine is None:
+        try:
+            from phantron_vision import VisionEngine
+            _vision_engine = VisionEngine(config=CONFIG)
+        except Exception:
+            _vision_engine = False
+    return _vision_engine or None
+
+
+def do_describe_screen():
+    """Computer-vision: describe what is currently on screen."""
+    log("Vision", "describe screen", "tool")
+    v = vision()
+    if not v:
+        return "Vision module load nahi hua. 'pip install pyautogui Pillow' (aur OCR ke liye pytesseract)."
+    send_screen()
+    return v.describe(ai_fn=_ai_raw)
+
+
+def do_read_screen():
+    """Computer-vision: OCR the screen and return the raw text."""
+    log("Vision", "read screen (OCR)", "tool")
+    v = vision()
+    if not v:
+        return "Vision module load nahi hua P7."
+    txt = v.read_text()
+    if txt == "__NO_OCR__":
+        return "OCR off hai. 'pip install pytesseract' + Tesseract-OCR engine install karo P7."
+    if not txt or txt.startswith("__"):
+        return "Screen par readable text nahi mila."
+    return "Screen par ye text hai P7:\n" + " ".join(txt.split())[:1500]
+
+
+def do_click_text(target):
+    """Computer-vision: find on-screen text/button and click it."""
+    target = (target or "").strip().strip("'\"")
+    if not target:
+        return "Kis text par click karun P7?"
+    log("Vision click", target, "tool")
+    v = vision()
+    if not v:
+        return "Click-by-text ke liye vision chahiye (pip install pyautogui pytesseract)."
+    hits = v.find_text(target)
+    if not hits:
+        return "Screen par '%s' nahi mila P7." % target
+    best = hits[0]
+    res = do_mouse("click", best["cx"], best["cy"])
+    return "'%s' par click kiya P7 (%d,%d). %s" % (target, best["cx"], best["cy"], res)
+
+
+def do_auto_task(goal):
+    """Run the fully autonomous, vision-grounded perceive->think->act loop."""
+    goal = (goal or "").strip()
+    if not goal:
+        return "Konsa autonomous goal du P7?"
+    log("Autonomous", goal[:60], "tool")
+    try:
+        from phantron_autonomous import AutonomousAgent
+    except Exception as e:
+        return "Autonomous core load nahi hua: " + str(e)
+
+    def _on_event(etype, data):
+        msg = data.get("message") or ""
+        if etype in ("goal", "step_start", "step_result", "blocked", "done", "fixing"):
+            log("auto:" + etype, msg, "error" if etype == "blocked" else "info")
+        if _server_ref and msg:
+            _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[auto] " + msg})
+
+    try:
+        agent = AutonomousAgent(config=CONFIG, ai_fn=_ai_raw, executor=execute_action,
+                                vision=vision(), on_event=_on_event)
+        report = agent.run(goal)
+        head = "Goal complete P7. " if report.get("ok") else "Goal adhura P7. "
+        return head + (report.get("summary") or "")
+    except Exception as e:
+        return "Autonomous error: " + str(e)
+
+
+def _code_doctor():
+    try:
+        from phantron_codedoctor import CodeDoctor
+
+        def _on_event(etype, data):
+            msg = data.get("message") or ""
+            if msg:
+                log("doctor:" + etype, msg, "info")
+                if _server_ref:
+                    _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[doctor] " + msg})
+
+        return CodeDoctor(config=CONFIG, ai_fn=_ai_raw, on_event=_on_event)
+    except Exception:
+        return None
+
+
+def do_code_analyze(path):
+    log("Code analyze", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.analyze_summary(path)
+
+
+def do_code_fix(path, error=""):
+    log("Code fix", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.auto_fix(path, error)
+
+
+def do_refactor(path, goal=""):
+    log("Refactor", path, "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    return doc.refactor(path, goal)
+
+
+def do_self_heal(command):
+    log("Self-heal", str(command)[:60], "tool")
+    doc = _code_doctor()
+    if not doc:
+        return "Code Doctor load nahi hua P7."
+    rep = doc.self_heal(command)
+    return rep.get("summary", "Self-heal done.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  FAST LOCAL PARSER  (instant, no AI cost)
 # ════════════════════════════════════════════════════════════════════════════
 def parse_and_execute(msg):
     ml = msg.lower().strip()
+
+    # ── HIGH-PRIORITY EXPLICIT COMMANDS (checked first so their arguments,
+    #    which may contain words like "kholo"/"likho", aren't hijacked) ──
+
+    # AUTONOMOUS MULTIMODAL TASK (vision-grounded perceive->think->act)
+    m = re.search(r"^\s*(?:auto|autonomous|agent\s*mode|khud\s+(?:se\s+)?karo)\b[:\-]?\s*(.+)", msg, re.I)
+    if m and len(m.group(1).strip()) > 2:
+        return do_auto_task(m.group(1).strip()), True
+
+    # CODE DOCTOR: analyze / fix / refactor a source file
+    m = re.search(r"(?:analyze|analyse|check)\s+(?:code\s+|file\s+)?(\S+\.\w+)", msg, re.I)
+    if m:
+        return do_code_analyze(m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:auto[\s-]*fix|bug\s*fix|fix\s+bug\s+in|theek\s+kar(?:o|do)?)\s+(\S+\.\w+)", msg, re.I)
+    if m:
+        return do_code_fix(m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:refactor|saaf\s+kar(?:o|do)?)\s+(\S+\.\w+)\s*(?:taaki|so\s+that|:)?\s*(.*)$", msg, re.I)
+    if m:
+        return do_refactor(m.group(1).strip().strip("'\""), (m.group(2) or "").strip()), True
 
     # ── PLAY SONG ──
     for pat in [
@@ -702,16 +857,33 @@ def parse_and_execute(msg):
     if any(x in ml for x in ["screenshot", "screen shot", "screen capture", "screen ki photo"]):
         return do_screenshot(), True
 
+    # ── VISION: read / describe the screen ──
+    if any(x in ml for x in ["screen padho", "read screen", "screen ka text", "screen read",
+                             "screen text padho"]):
+        return do_read_screen(), True
+    if any(x in ml for x in ["screen me kya", "screen pe kya", "screen par kya", "describe screen",
+                             "screen dekho", "kya dikh raha", "screen describe", "screen analyze",
+                             "what's on screen", "whats on screen", "screen samjho"]):
+        return do_describe_screen(), True
+
     # ── SEARCH ──
     m = re.search(r"(?:search\s+kar(?:o|do)?|dhundo|dhundho|khojo|google\s+kar(?:o|do)?)\s+(.+)", ml)
     if m:
         return do_web_search(m.group(1).strip()), True
 
-    # ── MOUSE ──
-    if "click" in ml or "click karo" in ml:
+    # ── MOUSE / CLICK  (coordinates OR vision click-by-text) ──
+    if "click" in ml:
         nums = re.findall(r"\d+", ml)
         if len(nums) >= 2:
             return do_mouse("click", int(nums[0]), int(nums[1])), True
+        # vision: "<text> par click karo"  /  "click on <text>"
+        m = re.search(r"(.+?)\s+(?:par|pe|button\s+par|wale\s+par)\s+click\s+kar(?:o|do)?", ml)
+        if not m:
+            m = re.search(r"click\s+(?:kar(?:o|do)?\s+)?(?:on\s+|the\s+)?(.+)$", ml)
+        if m:
+            tgt = m.group(1).strip().strip("'\"")
+            if tgt and tgt not in ("karo", "kar do", "here", "yahan", "yaha"):
+                return do_click_text(tgt), True
         return do_mouse("click"), True
     if re.search(r"scroll\s+up|upar\s+scroll", ml):
         return do_mouse("scroll_up"), True
@@ -790,6 +962,11 @@ ACTION_SYSTEM = (
     "system audit, RAM free karna) - ye khud sub-steps banata hai aur error khud fix karta hai\n"
     "- security_audit {{target}}: defensive security scan (network sockets, process integrity, "
     "log analysis) - access log file ka path bhi de sakte ho\n"
+    "- read_screen {{}} | describe_screen {{}}: screen ko vision/OCR se padho ya samjho\n"
+    "- click_text {{text}}: screen par dikh raha button/text dhundh kar click karo (coordinates ki zaroorat nahi)\n"
+    "- auto_task {{goal}}: vision-grounded autonomous multi-step task - khud screen dekh kar poora karo\n"
+    "- code_analyze {{path}} | code_fix {{path, error}} | refactor {{path, goal}}: apne hi codebase ko "
+    "analyze/fix/refactor karo (auto backup + compile-check ke saath)\n"
     "Hamesha Hindi me. SIRF valid JSON output karo, aur kuch mat likho."
 )
 
@@ -920,6 +1097,15 @@ _ACTION_DISPATCH = {
     "scaffold": lambda a: do_scaffold_project(a.get("kind", ""), a.get("name", "")),
     "os_agent": lambda a: do_os_agent(a.get("task") or a.get("goal") or a.get("text", "")),
     "security_audit": lambda a: do_security_audit(a.get("target") or a.get("log") or a.get("text", "")),
+    "read_screen": lambda a: do_read_screen(),
+    "describe_screen": lambda a: do_describe_screen(),
+    "click_text": lambda a: do_click_text(a.get("text") or a.get("target") or a.get("query", "")),
+    "auto_task": lambda a: do_auto_task(a.get("goal") or a.get("task") or a.get("text", "")),
+    "code_analyze": lambda a: do_code_analyze(a.get("path") or a.get("file", "")),
+    "code_fix": lambda a: do_code_fix(a.get("path") or a.get("file", ""), a.get("error", "")),
+    "refactor": lambda a: do_refactor(a.get("path") or a.get("file", ""),
+                                      a.get("goal") or a.get("instruction", "")),
+    "self_heal": lambda a: do_self_heal(a.get("command") or a.get("cmd", "")),
 }
 
 
@@ -1264,6 +1450,8 @@ def detect_capabilities():
         "ai_detail": ai_detail,
         "metrics": _module_present("psutil"),       # CPU/RAM/battery gauges
         "automation": _module_present("pyautogui"),  # mouse/keyboard/screenshot/screen
+        "vision_ocr": _module_present("pytesseract"),  # read screen text / click-by-text
+        "vision_match": _module_present("cv2"),        # robust image template matching
         "voice_out": (_module_present("pyttsx3") or _module_present("win32com")
                       or _module_present("edge_tts")),
         "voice_in": _module_present("speech_recognition"),
@@ -1280,6 +1468,7 @@ def capability_summary(caps):
         "  AI brain   : %s  (%s)" % (mark(caps["ai_ready"]), caps["ai_detail"]),
         "  Metrics    : %s  (psutil - CPU/RAM/battery gauges)" % mark(caps["metrics"]),
         "  Automation : %s  (pyautogui - mouse/keyboard/screenshot/live screen)" % mark(caps["automation"]),
+        "  Vision OCR : %s  (pytesseract - read screen text / click-by-text)" % mark(caps.get("vision_ocr")),
         "  Voice out  : %s  (spoken replies)" % mark(caps["voice_out"]),
         "  Voice in   : %s  (microphone)" % mark(caps["voice_in"]),
     ]

@@ -1,0 +1,18 @@
+# ── PHANTRON v7 OPTIONAL computer-vision dependencies ───────
+# These power the "eyes": reading on-screen text (OCR), click-by-text, and
+# robust image/template matching for the autonomous agent.
+#
+#   pip install -r requirements-vision.txt
+#
+# IMPORTANT: pytesseract is only the Python wrapper. For OCR to actually work
+# you also need the Tesseract-OCR ENGINE installed on the system:
+#   Windows : https://github.com/UB-Mannheim/tesseract/wiki  (add to PATH)
+#   Linux   : sudo apt install tesseract-ocr
+#   macOS   : brew install tesseract
+#
+# Without these, PHANTRON still captures the screen and shows the live feed;
+# it just cannot read text / click-by-text until OCR is installed.
+
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+numpy>=1.24.0
