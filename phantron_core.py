@@ -783,6 +783,70 @@ def do_self_heal(command):
     return rep.get("summary", "Self-heal done.")
 
 
+# ── APP CONTROL + SKILLS (WhatsApp / YouTube / any registered app) ──────────
+_app_ctrl = None
+_skills = None
+
+
+def app_controller():
+    global _app_ctrl
+    if _app_ctrl is None:
+        try:
+            from phantron_apps import AppController
+            _app_ctrl = AppController(config=CONFIG)
+        except Exception:
+            _app_ctrl = False
+    return _app_ctrl or None
+
+
+def skills():
+    global _skills
+    if _skills is None:
+        try:
+            from phantron_skills import Skills
+            _skills = Skills(config=CONFIG, apps=app_controller(), vision=vision())
+        except Exception:
+            _skills = False
+    return _skills or None
+
+
+def do_app(name):
+    """Launch any registered/known application by friendly name."""
+    log("App", name, "tool")
+    ac = app_controller()
+    if not ac:
+        return do_open(name)  # fall back to the basic opener
+    return ac.launch(name)
+
+
+def do_whatsapp_send(contact, message):
+    log("WhatsApp", "%s: %s" % (contact, str(message)[:40]), "tool")
+    s = skills()
+    return s.whatsapp_send(contact, message) if s else "Skills load nahi hue P7."
+
+
+def do_whatsapp_read(contact=None):
+    log("WhatsApp read", contact or "current", "tool")
+    s = skills()
+    return s.whatsapp_read(contact) if s else "Skills load nahi hue P7."
+
+
+def do_youtube(action, query=""):
+    log("YouTube", action + (" " + query if query else ""), "tool")
+    s = skills()
+    if not s:
+        return "Skills load nahi hue P7."
+    return {
+        "search": lambda: s.youtube_search(query),
+        "play": lambda: s.youtube_play(query),
+        "skip_ad": s.youtube_skip_ad,
+        "next": s.youtube_next,
+        "prev": s.youtube_prev,
+        "pause": s.youtube_pause,
+        "fullscreen": s.youtube_fullscreen,
+    }.get(action, lambda: "YouTube action samajh nahi aaya P7.")()
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  FAST LOCAL PARSER  (instant, no AI cost)
 # ════════════════════════════════════════════════════════════════════════════
@@ -807,6 +871,48 @@ def parse_and_execute(msg):
     m = re.search(r"(?:refactor|saaf\s+kar(?:o|do)?)\s+(\S+\.\w+)\s*(?:taaki|so\s+that|:)?\s*(.*)$", msg, re.I)
     if m:
         return do_refactor(m.group(1).strip().strip("'\""), (m.group(2) or "").strip()), True
+
+    # ── WHATSAPP ──
+    m = re.search(r"whatsapp\s*(?:pe|par|me|se)?\s*(.+?)\s+ko\s+(.+?)\s+(?:bhejo|bhej\s*do|send\s*kar(?:o|do)?|likho|likh\s*do)\b", msg, re.I)
+    if not m:
+        m = re.search(r"(.+?)\s+ko\s+whatsapp\s*(?:pe|par)?\s+(.+?)\s+(?:bhejo|bhej\s*do|send\s*kar(?:o|do)?)\b", msg, re.I)
+    if m:
+        return do_whatsapp_send(m.group(1).strip().strip("'\""), m.group(2).strip().strip("'\"")), True
+    m = re.search(r"whatsapp\s*(?:pe|par)?\s*(.+?)\s+(?:ki|ke)\s+(?:chat|message|msg)\s+(?:padho|read|dikhao)", msg, re.I)
+    if m:
+        return do_whatsapp_read(m.group(1).strip().strip("'\"")), True
+    if re.search(r"whatsapp\s+(?:chat\s+)?(?:padho|read|dikhao)", ml):
+        return do_whatsapp_read(), True
+
+    # ── YOUTUBE controls ──
+    if re.search(r"\b(?:skip\s*ad|ad\s*skip|skip\s*ads|advertisement\s*skip)\b", ml):
+        return do_youtube("skip_ad"), True
+    if re.search(r"\b(?:next\s+video|agla\s+video|video\s+next|aage\s+wala\s+video)\b", ml):
+        return do_youtube("next"), True
+    if re.search(r"\b(?:pichla\s+video|previous\s+video|prev\s+video)\b", ml):
+        return do_youtube("prev"), True
+    if re.search(r"\b(?:video\s+(?:pause|rok)|youtube\s+pause)\b", ml):
+        return do_youtube("pause"), True
+    if re.search(r"\b(?:full\s*screen|fullscreen)\b", ml):
+        return do_youtube("fullscreen"), True
+    m = re.search(r"youtube\s*(?:pe|par|me)\s+(.+?)\s+(?:search\s*kar(?:o|do)?|dhundo|khojo)\b", msg, re.I)
+    if m:
+        return do_youtube("search", m.group(1).strip().strip("'\"")), True
+    m = re.search(r"youtube\s*(?:pe|par|me)\s+(.+?)\s+(?:chalao|play\s*kar(?:o|do)?|laga(?:o|do)?)\b", msg, re.I)
+    if m:
+        return do_youtube("play", m.group(1).strip().strip("'\"")), True
+
+    # ── OPEN a known/registered app  ("whatsapp kholo", "open blender") ──
+    m = re.search(r"^\s*(?:open|launch|start)\s+(.+)$", msg, re.I)
+    if not m:
+        m = re.search(r"(.+?)\s+(?:kholo|khol\s*do|chalu\s*kar(?:o|do)?|start\s*kar(?:o|do)?)\s*$", msg, re.I)
+    if m:
+        _name = m.group(1).strip().strip("'\"")
+        _ac = app_controller()
+        if _ac and _name:
+            _canon, _spec = _ac.resolve(_name)
+            if _spec is not None:
+                return do_app(_name), True   # known app -> rich launcher
 
     # ── PLAY SONG ──
     for pat in [
@@ -967,6 +1073,9 @@ ACTION_SYSTEM = (
     "- auto_task {{goal}}: vision-grounded autonomous multi-step task - khud screen dekh kar poora karo\n"
     "- code_analyze {{path}} | code_fix {{path, error}} | refactor {{path, goal}}: apne hi codebase ko "
     "analyze/fix/refactor karo (auto backup + compile-check ke saath)\n"
+    "- app {{name}}: koi bhi app kholo (whatsapp, youtube, vscode, blender, word, excel, camera, ...)\n"
+    "- whatsapp_send {{contact, message}} | whatsapp_read {{contact}}: WhatsApp Desktop par message bhejo/padho\n"
+    "- youtube {{action, query}}: action = search/play/skip_ad/next/prev/pause/fullscreen\n"
     "Hamesha Hindi me. SIRF valid JSON output karo, aur kuch mat likho."
 )
 
@@ -1106,6 +1215,12 @@ _ACTION_DISPATCH = {
     "refactor": lambda a: do_refactor(a.get("path") or a.get("file", ""),
                                       a.get("goal") or a.get("instruction", "")),
     "self_heal": lambda a: do_self_heal(a.get("command") or a.get("cmd", "")),
+    "app": lambda a: do_app(a.get("name") or a.get("target") or a.get("app", "")),
+    "whatsapp_send": lambda a: do_whatsapp_send(a.get("contact") or a.get("to", ""),
+                                                a.get("message") or a.get("text", "")),
+    "whatsapp_read": lambda a: do_whatsapp_read(a.get("contact") or a.get("to")),
+    "youtube": lambda a: do_youtube(a.get("action", "search"),
+                                    a.get("query") or a.get("song") or a.get("text", "")),
 }
 
 
@@ -1610,6 +1725,20 @@ class PhantronServer:
                 pass
             await asyncio.sleep(interval)
 
+    async def keepawake_loop(self):
+        """Keep the machine awake for 24/7 operation (prevents idle sleep/lock).
+        NOTE: this only stops INACTIVITY lock. It cannot unlock an already
+        locked screen - that is an OS security boundary by design."""
+        interval = max(30, int(CONFIG.get("keep_awake_interval_sec", 60)))
+        while True:
+            try:
+                s = skills()
+                if s:
+                    await self.loop.run_in_executor(None, s.keep_awake_tick)
+            except Exception:
+                pass
+            await asyncio.sleep(interval)
+
     # ---- terminal + voice input ----
     def start_console_input(self):
         def _loop():
@@ -1667,6 +1796,8 @@ class PhantronServer:
 
         asyncio.create_task(self.metrics_loop())
         asyncio.create_task(self.screen_loop())
+        if CONFIG.get("keep_awake"):
+            asyncio.create_task(self.keepawake_loop())
         self.start_console_input()
         start_wake_loop(self.voice_callback)
 

@@ -104,9 +104,86 @@
   .logitem.error .a{color:var(--red)}
   ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#16304f;border-radius:8px}
   .hint{padding:8px 14px;font-size:11px;color:var(--dim)}
+
+  /* ===================== CYBERPUNK / JARVIS FX ===================== */
+  /* animated background grid */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(34,211,238,.06) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(34,211,238,.06) 1px,transparent 1px);
+    background-size:40px 40px;
+    mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 80%);
+    animation:gridmove 12s linear infinite;
+  }
+  @keyframes gridmove{from{background-position:0 0}to{background-position:40px 40px}}
+  /* moving scanlines + subtle flicker */
+  .scanlines{
+    position:fixed;inset:0;z-index:9998;pointer-events:none;
+    background:repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.10) 3px,rgba(0,0,0,0) 4px);
+    mix-blend-mode:overlay;opacity:.5;
+  }
+  .grid{position:relative;z-index:1}
+  /* title glow + glitch */
+  .logo h1{
+    color:#eafdff;text-shadow:0 0 8px var(--cyan),0 0 22px #0891b2;
+    position:relative;
+  }
+  .logo h1::after{
+    content:"PHANTRON";position:absolute;left:0;top:0;color:#ff2e88;
+    clip-path:inset(0 0 55% 0);opacity:.5;
+    animation:glitch 3.6s infinite steps(2);
+  }
+  @keyframes glitch{
+    0%,92%,100%{transform:translate(0,0)}
+    93%{transform:translate(-2px,1px)}95%{transform:translate(2px,-1px)}
+    97%{transform:translate(-1px,0)}
+  }
+  /* boot sequence overlay */
+  #boot{
+    position:fixed;inset:0;z-index:10000;background:#02050b;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;transition:opacity .8s ease;font-family:"Consolas",monospace;
+  }
+  #boot.gone{opacity:0;pointer-events:none}
+  #boot .core{
+    width:120px;height:120px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%,var(--cyan),#06384a 60%,transparent 72%);
+    box-shadow:0 0 40px var(--cyan),inset 0 0 30px #000;
+    animation:spin 3s linear infinite,pulse 1.6s ease-in-out infinite;
+    position:relative;
+  }
+  #boot .core::before,#boot .core::after{
+    content:"";position:absolute;inset:-14px;border-radius:50%;
+    border:1px solid rgba(34,211,238,.4);border-top-color:var(--cyan);
+    animation:spin 2.2s linear infinite;
+  }
+  #boot .core::after{inset:-28px;border:1px dashed rgba(56,189,248,.3);animation-duration:4s;animation-direction:reverse}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #boot h1{font-size:30px;letter-spacing:10px;color:#eafdff;text-shadow:0 0 16px var(--cyan)}
+  #bootlog{font-size:12px;color:var(--cyan2);letter-spacing:1px;min-height:60px;text-align:center;line-height:1.7}
+  #bootlog .ok{color:var(--green)}
+  /* voice equalizer (shows when mic live) */
+  .eq{display:none;align-items:flex-end;gap:3px;height:22px;margin-left:6px}
+  .eq.live{display:inline-flex}
+  .eq i{width:3px;background:var(--cyan);border-radius:2px;animation:eq .9s ease-in-out infinite}
+  .eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.3s}
+  .eq i:nth-child(4){animation-delay:.45s}.eq i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:5px}50%{height:22px}}
+  #aiStat{padding:3px 10px;border:1px solid var(--line);border-radius:20px;font-weight:700;font-size:11px}
 </style>
 </head>
 <body>
+
+<!-- boot sequence -->
+<div id="boot">
+  <div class="core"></div>
+  <h1>PHANTRON</h1>
+  <div id="bootlog"></div>
+</div>
+<div class="scanlines"></div>
+
 <div class="grid">
 
   <header>
@@ -171,6 +248,7 @@
     <div class="chat" id="chat"></div>
     <div class="inputbar">
       <input id="txt" placeholder="P7, command type karo… (ya mic dabao)" autocomplete="off">
+      <span class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i></span>
       <button id="mic" title="Bolo">🎙</button>
       <button id="send">SEND</button>
     </div>
@@ -192,6 +270,31 @@ const C = 2 * Math.PI * 30; // ring circumference
 
 let ws, reconnectTimer, typingEl = null;
 
+/* ---- boot sequence ---- */
+let bootDone = false;
+function runBoot(){
+  const lines = [
+    "[ ok ] Phantron core initialising…",
+    "[ ok ] Loading vision module… <span class='ok'>online</span>",
+    "[ ok ] Loading autonomous core… <span class='ok'>online</span>",
+    "[ ok ] Linking keyboard / mouse I/O… <span class='ok'>online</span>",
+    "[ ok ] Establishing neural link ws://localhost…",
+  ];
+  const box = $("bootlog");
+  let i = 0;
+  (function next(){
+    if(i < lines.length){ box.innerHTML += lines[i++] + "<br>"; setTimeout(next, 360); }
+  })();
+}
+function hideBoot(){
+  if(bootDone) return;
+  bootDone = true;
+  const b = $("boot");
+  if(b){ b.classList.add("gone"); setTimeout(()=>b.remove(), 900); }
+}
+runBoot();
+setTimeout(hideBoot, 5000); // fallback: never get stuck on the boot screen
+
 function connect(){
   ws = new WebSocket(WS_URL);
   ws.onopen = () => { setConn(true); };
@@ -202,6 +305,7 @@ function connect(){
 function setConn(on){
   $("conn").classList.toggle("on", on);
   $("connTxt").textContent = on ? "ONLINE" : "OFFLINE — retry…";
+  if(on) hideBoot();
 }
 
 function handle(m){
@@ -312,11 +416,11 @@ if(SR){
     $("txt").value = text;
     send();
   };
-  recog.onend = () => { listening = false; mic.classList.remove("live"); };
-  recog.onerror = () => { listening = false; mic.classList.remove("live"); };
+  recog.onend = () => { listening = false; mic.classList.remove("live"); $("eq").classList.remove("live"); };
+  recog.onerror = () => { listening = false; mic.classList.remove("live"); $("eq").classList.remove("live"); };
   mic.onclick = () => {
     if(listening){ recog.stop(); return; }
-    try{ recog.start(); listening = true; mic.classList.add("live"); }catch(_){}
+    try{ recog.start(); listening = true; mic.classList.add("live"); $("eq").classList.add("live"); }catch(_){}
   };
 } else {
   mic.title = "Is browser me mic support nahi (Python voice phir bhi chalega)";
