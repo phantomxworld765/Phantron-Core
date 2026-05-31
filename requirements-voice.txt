@@ -1,0 +1,33 @@
+# ── PHANTRON v7 OPTIONAL voice + cloud-AI dependencies ──────
+# PHANTRON works fully on TEXT without any of these. Install them only if
+# you want microphone input and/or spoken replies.
+#
+#   pip install -r requirements-voice.txt
+#
+# NOTE: 'pyaudio' needs a C compiler on Windows and often fails to build.
+# If it does, everything else here still installs because we list it last
+# and the launcher installs this file in best-effort mode. If you want the
+# mic and pyaudio won't build, install a prebuilt wheel:
+#       pip install pipwin && pipwin install pyaudio
+
+# Voice OUTPUT (spoken replies) - any one of these is enough
+pyttsx3>=2.90
+edge-tts>=6.1.9
+pygame>=2.5.0
+
+# Windows-only native TTS (best Hindi voice, no extra download)
+pywin32>=306 ; sys_platform == "win32"
+
+# Audio DSP helpers (wake-word energy gating, resampling)
+sounddevice>=0.4.6
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Voice INPUT (microphone speech-to-text)
+SpeechRecognition>=3.10.0
+# pyaudio is the microphone backend. Keep it LAST so a build failure here
+# does not stop the other voice packages above from installing.
+pyaudio>=0.2.13
+
+# Optional cloud AI brain (only used if claude_api_key is set in config.json)
+anthropic>=0.39.0

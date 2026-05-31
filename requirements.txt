@@ -1,32 +1,15 @@
-# ── PHANTRON v7 dependencies ─────────────────────────────────
-# Core (required)
+# ── PHANTRON v7 CORE dependencies ───────────────────────────
+# These ALL ship prebuilt wheels, so they install cleanly on Windows
+# without any C/C++ compiler. PHANTRON's interface, metrics, screen feed,
+# mouse/keyboard, screenshots and app control all work with just these.
+#
+#   pip install -r requirements.txt
+#
+# Voice (mic input / spoken output) is OPTIONAL and lives in
+# requirements-voice.txt so a failed build there can never break the core.
+
 websockets>=11.0
 psutil>=5.9.0
 requests>=2.31.0
-
-# Screen + device control (required for automation)
 pyautogui>=0.9.54
 Pillow>=10.0.0
-
-# Voice input (optional - assistant still works on text without these)
-SpeechRecognition>=3.10.0
-# pyaudio is needed for the microphone. On Windows: pip install pyaudio
-# If pyaudio fails to build, install a prebuilt wheel:
-#   pip install pipwin && pipwin install pyaudio
-pyaudio>=0.2.13
-
-# Audio signal processing / DSP (wake-word energy gating, resampling, filters)
-sounddevice>=0.4.6
-numpy>=1.24.0
-scipy>=1.10.0
-
-# Voice output / TTS (any one of these works; auto-detected at runtime)
-pyttsx3>=2.90
-edge-tts>=6.1.9
-pygame>=2.5.0
-
-# Windows-only native TTS (best Hindi voice, no extra download)
-pywin32>=306 ; sys_platform == "win32"
-
-# Optional cloud AI (only used if claude_api_key is set in config.json)
-anthropic>=0.39.0

@@ -10,7 +10,7 @@ echo ====================================================
 REM --- Check Python ---
 where python >nul 2>nul
 if errorlevel 1 (
-    echo [ERROR] Python nahi mila. Python 3.10+ install karo aur PATH me add karo.
+    echo [ERROR] Python nahi mila. Python 3.10+ install karo aur "Add to PATH" tick karo.
     echo         https://www.python.org/downloads/
     pause
     exit /b 1
@@ -24,15 +24,40 @@ if not exist ".venv\Scripts\python.exe" (
 
 call ".venv\Scripts\activate.bat"
 
-REM --- Install / update dependencies ---
-echo [SETUP] Dependencies check kar raha hoon...
 python -m pip install --upgrade pip >nul 2>nul
+
+REM --- CORE dependencies (REQUIRED). If these fail, PHANTRON cannot run. ---
+echo.
+echo [SETUP] Core dependencies install kar raha hoon (zaroori)...
 pip install -r requirements.txt
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Core dependencies install nahi hui. Internet check karo aur dobara chalao.
+    pause
+    exit /b 1
+)
+
+REM --- VOICE dependencies (OPTIONAL). Failure here is OK - text still works. ---
+echo.
+echo [SETUP] Voice dependencies install kar raha hoon (optional - fail ho to bhi chalega)...
+pip install -r requirements-voice.txt
+if errorlevel 1 (
+    echo [WARN]  Kuch voice packages install nahi hue ^(shayad pyaudio^). Koi baat nahi -
+    echo         PHANTRON text aur interface se poori tarah chalega. Mic baad me laga sakte ho.
+)
+
+REM --- Tell the user about the AI brain status ---
+echo.
+echo [INFO] AI BRAIN: PHANTRON ko sochne ke liye ek backend chahiye.
+echo        - FREE local : Ollama install karo ^(https://ollama.com^), phir: ollama pull llama3
+echo        - YA cloud   : config.json me "claude_api_key" daal do.
+echo        Bina iske bhi: app kholna, gaana, screenshot, system info, time/date,
+echo        aur basic baat-cheet kaam karegi ^(offline mode^).
+echo.
 
 REM --- Launch PHANTRON ---
-echo.
 echo [PHANTRON] Start ho raha hai... Interface browser me khulega.
-echo [PHANTRON] Yahin terminal me text command type kar sakte ho.
+echo [PHANTRON] Yahin terminal me bhi command type kar sakte ho.
 echo.
 python phantron_core.py
 

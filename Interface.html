@@ -116,6 +116,7 @@
     </div>
     <div class="status">
       <span><span id="conn" class="dot"></span><span id="connTxt">CONNECTING…</span></span>
+      <span id="aiStat" title="AI brain status">AI: —</span>
       <span id="osInfo">—</span>
       <span class="clock" id="clock">--:--:--</span>
     </div>
@@ -213,6 +214,22 @@ function handle(m){
     case "metrics":     updateMetrics(m); break;
     case "screen_update": updateScreen(m.img); break;
     case "activity_update": updateLog(m.log); break;
+    case "capabilities": updateCaps(m); break;
+  }
+}
+
+/* ---- AI / capability status pill ---- */
+function updateCaps(m){
+  const el = $("aiStat");
+  const caps = m.caps || {};
+  if(m.ai_online){
+    el.textContent = "AI: ONLINE";
+    el.style.color = "var(--green)";
+    el.title = caps.ai_detail || "AI brain ready";
+  } else {
+    el.textContent = "AI: OFFLINE";
+    el.style.color = "var(--red)";
+    el.title = "AI brain off - set up Ollama or a Claude API key. Basic commands still work.";
   }
 }
 
