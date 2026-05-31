@@ -933,6 +933,70 @@ def execute_action(tool, args):
         return "Action error (%s): %s" % (tool, e)
 
 
+def _offline_brain(msg):
+    """A tiny rule-based brain so PHANTRON stays useful even with NO Ollama/Claude.
+    Handles greetings, identity, time/date, simple math, thanks and a help menu.
+    Returns a Hindi reply string, or None if it has nothing confident to say."""
+    user = CONFIG.get("user_name", "P7")
+    name = CONFIG.get("assistant_name", "PHANTRON")
+    t = (msg or "").lower().strip()
+    if not t:
+        return None
+
+    # greetings / small talk
+    if re.search(r"\b(hi|hello|hey|namaste|namaskar|salaam|yo)\b", t) or \
+       re.search(r"kaise ho|kaisa hai|kya haal|whats up|what's up|sab badhiya", t):
+        return "Namaste %s. Main %s, taiyaar hoon. Bataiye kya karna hai?" % (user, name)
+
+    # identity
+    if re.search(r"tum kaun|who are you|aap kaun|naam kya|your name|tumhara naam", t):
+        return ("Main %s hoon %s - aapka personal AI assistant. App khol sakta hoon, "
+                "gaane chala sakta hoon, system control kar sakta hoon aur bahut kuch."
+                % (name, user))
+
+    # thanks / acknowledgement
+    if re.search(r"thank|thanks|shukriya|dhanyavaad|dhanyawad|good job|shabaash|badhiya", t):
+        return "Hamesha %s. Aur kuch?" % user
+
+    # current time
+    if re.search(r"\b(time|samay|kitne baje|baj rahe|kya baja)\b", t):
+        return "Abhi %s baje hain %s." % (datetime.now().strftime("%I:%M %p"), user)
+
+    # date / day
+    if re.search(r"\b(date|tareekh|tarikh|din kaunsa|kaunsa din|today|aaj ki)\b", t):
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        now = datetime.now()
+        return "Aaj %s, %s hai %s." % (days[now.weekday()], now.strftime("%d %B %Y"), user)
+
+    # simple arithmetic:  e.g. "5 + 3",  "12 * 4",  "100 / 5"
+    m = re.search(r"(-?\d+(?:\.\d+)?)\s*([+\-*x/])\s*(-?\d+(?:\.\d+)?)", t)
+    if m:
+        a, op, b = float(m.group(1)), m.group(2), float(m.group(3))
+        op = "*" if op == "x" else op
+        try:
+            if op == "/" and b == 0:
+                return "Zero se divide nahi kar sakta %s." % user
+            res = {"+": a + b, "-": a - b, "*": a * b, "/": (a / b if b else 0)}[op]
+            res = int(res) if float(res).is_integer() else round(res, 4)
+            return "%s = %s" % (m.group(0).strip(), res)
+        except Exception:
+            pass
+
+    # help / capability menu
+    if re.search(r"\b(help|madad|kya kar sakte|command|kaam kya|menu|kya kar sakta)\b", t):
+        return ("Main ye sab kar sakta hoon %s:\n"
+                "- 'chrome kholo' / 'youtube kholo' - app ya website\n"
+                "- 'arijit singh tum hi ho bajao' - gaana chalao\n"
+                "- 'screenshot lo' | 'system info' | 'volume badha do'\n"
+                "- 'search karo <topic>' - web search\n"
+                "- 'code likho <kaam>' | 'android project banao'\n"
+                "- 'security audit' - defensive system scan\n"
+                "Aur khulkar baat-cheet ke liye Ollama ya Claude laga do, phir main aur smart ban jaunga."
+                % user)
+
+    return None
+
+
 def ai_brain(msg):
     """Autonomous AGENTIC mode: AI plans + executes over multiple steps with full control."""
     user = CONFIG.get("user_name", "P7")
@@ -943,7 +1007,9 @@ def ai_brain(msg):
         for step in range(max_steps):
             raw = _ai_raw(context, ACTION_SYSTEM.format(user=user))
             if raw and raw.startswith("__ERR__"):
-                return _ai_offline_hint(raw)
+                # No cloud/local model reachable -> use the built-in offline brain
+                # for the everyday stuff, otherwise give an actionable hint.
+                return _offline_brain(msg) or _ai_offline_hint(raw)
             data = _extract_json(raw)
             if not (data and isinstance(data, dict)):
                 # Model didn't return JSON -> treat as a plain reply and stop.
@@ -987,14 +1053,17 @@ def ai_brain(msg):
     # plain chat mode (autonomous off)
     raw = _ai_raw("P7: " + msg, CHAT_SYSTEM.format(user=user))
     if raw and raw.startswith("__ERR__"):
-        return _ai_offline_hint(raw)
+        return _offline_brain(msg) or _ai_offline_hint(raw)
     return clean(raw) or "Samajh nahi aaya P7, dobara boliye."
 
 
-def _ai_offline_hint(err):
-    return ("AI brain abhi offline hai P7. " +
-            ("Ollama start karo (ollama serve) ya config.json me claude_api_key daalo. " ) +
-            "[" + err.replace("__ERR__", "").strip() + "]")
+def _ai_offline_hint(err=""):
+    user = CONFIG.get("user_name", "P7")
+    return ("Is baat ka jawab dene ke liye mera AI brain chahiye %s, jo abhi off hai. "
+            "Free me chalane ke liye Ollama install karke 'ollama serve' karo (model: "
+            "'ollama pull llama3'), ya config.json me apni claude_api_key daal do. "
+            "Tab tak app kholna, gaana, screenshot, system info, time/date jaise "
+            "commands chalte rahenge." % user)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1159,6 +1228,79 @@ def start_wake_loop(callback):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  CAPABILITY SELF-CHECK
+# ════════════════════════════════════════════════════════════════════════════
+def _module_present(mod):
+    try:
+        __import__(mod)
+        return True
+    except Exception:
+        return False
+
+
+def _ollama_online():
+    """Quick, cheap probe: is an Ollama server actually answering locally?"""
+    try:
+        base = (CONFIG.get("ollama_url") or "").split("/api/")[0] or "http://localhost:11434"
+        req = urllib.request.Request(base + "/api/tags")
+        with urllib.request.urlopen(req, timeout=1.5) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def detect_capabilities():
+    """Figure out what PHANTRON can actually do right now, so the user is never
+    left guessing why something 'does nothing'."""
+    if CONFIG.get("claude_api_key"):
+        ai_ready, ai_detail = True, "Claude (cloud)"
+    elif _ollama_online():
+        ai_ready, ai_detail = True, "Ollama %s" % CONFIG.get("ollama_model", "llama3")
+    else:
+        ai_ready, ai_detail = False, "OFFLINE (set up Ollama or claude_api_key)"
+
+    return {
+        "ai_ready": ai_ready,
+        "ai_detail": ai_detail,
+        "metrics": _module_present("psutil"),       # CPU/RAM/battery gauges
+        "automation": _module_present("pyautogui"),  # mouse/keyboard/screenshot/screen
+        "voice_out": (_module_present("pyttsx3") or _module_present("win32com")
+                      or _module_present("edge_tts")),
+        "voice_in": _module_present("speech_recognition"),
+    }
+
+
+CAPABILITIES = {}
+
+
+def capability_summary(caps):
+    def mark(ok):
+        return "ON " if ok else "off"
+    return [
+        "  AI brain   : %s  (%s)" % (mark(caps["ai_ready"]), caps["ai_detail"]),
+        "  Metrics    : %s  (psutil - CPU/RAM/battery gauges)" % mark(caps["metrics"]),
+        "  Automation : %s  (pyautogui - mouse/keyboard/screenshot/live screen)" % mark(caps["automation"]),
+        "  Voice out  : %s  (spoken replies)" % mark(caps["voice_out"]),
+        "  Voice in   : %s  (microphone)" % mark(caps["voice_in"]),
+    ]
+
+
+def capability_interface_note(caps):
+    """A short human note PHANTRON shows inside the web interface on connect."""
+    parts = []
+    if not caps["ai_ready"]:
+        parts.append("AI brain OFFLINE - Ollama/Claude lagao to khulkar baat ho. "
+                     "Tab tak app/gaana/screenshot/time jaise commands chalenge.")
+    if not caps["metrics"]:
+        parts.append("CPU/RAM gauges ke liye 'pip install psutil' chahiye.")
+    if not caps["automation"]:
+        parts.append("Screenshot/mouse/keyboard/live-screen ke liye 'pip install pyautogui Pillow' chahiye.")
+    if not parts:
+        return "Sab systems ONLINE. Bataiye kya karna hai %s." % CONFIG.get("user_name", "P7")
+    return " ".join(parts)
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  SERVER
 # ════════════════════════════════════════════════════════════════════════════
 class PhantronServer:
@@ -1215,6 +1357,15 @@ class PhantronServer:
             "message": "%s ACTIVE. %s, hamesha taiyaar hoon." % (
                 CONFIG.get("assistant_name", "PHANTRON"), CONFIG.get("user_name", "P7")),
             "status": "online",
+        }, ensure_ascii=False))
+        await ws.send(json.dumps({
+            "type": "capabilities",
+            "caps": CAPABILITIES,
+            "ai_online": bool(CAPABILITIES.get("ai_ready")),
+        }, ensure_ascii=False))
+        await ws.send(json.dumps({
+            "type": "system",
+            "message": capability_interface_note(CAPABILITIES),
         }, ensure_ascii=False))
         await ws.send(json.dumps({"type": "activity_update", "log": activity_log[:15]}, ensure_ascii=False))
         try:
@@ -1301,6 +1452,9 @@ class PhantronServer:
         self.loop = asyncio.get_running_loop()
         port = CONFIG.get("ws_port", 8765)
 
+        global CAPABILITIES
+        CAPABILITIES = detect_capabilities()
+
         bar = "=" * 54
         print(bar)
         print("  PHANTRON v7  -  %s BEAST MODE" % CONFIG.get("user_name", "P7"))
@@ -1310,6 +1464,16 @@ class PhantronServer:
         print("  Cloud AI : Claude %s" % ("ON" if CONFIG.get("claude_api_key") else "off"))
         print("  Inputs   : Interface + Terminal + Voice")
         print("  Port     : %d" % port)
+        print(bar)
+        print("  CAPABILITY CHECK")
+        for line in capability_summary(CAPABILITIES):
+            print(line)
+        if not CAPABILITIES.get("ai_ready"):
+            print("  NOTE: AI brain OFFLINE. App/gaana/screenshot/system/time jaise")
+            print("        commands chalenge. Khulkar baat-cheet ke liye Ollama")
+            print("        (ollama serve) ya config.json me claude_api_key lagao.")
+        if not (CAPABILITIES.get("metrics") and CAPABILITIES.get("automation")):
+            print("  TIP : Missing features ke liye:  pip install -r requirements.txt")
         print(bar)
 
         asyncio.create_task(self.metrics_loop())
