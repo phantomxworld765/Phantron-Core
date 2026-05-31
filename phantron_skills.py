@@ -71,6 +71,43 @@ class Skills:
             return self.apps.launch(name)
         return None
 
+    def _activate(self, *title_substrings):
+        """Bring a window whose title contains any of the substrings to the
+        foreground so our keystrokes land in the RIGHT app. Best-effort:
+        pygetwindow ships with pyautogui on Windows; silently ignored elsewhere.
+        Returns True if a matching window was focused."""
+        pg = self._pg()
+        if not pg or not hasattr(pg, "getAllWindows"):
+            return False
+        try:
+            for w in pg.getAllWindows():
+                title = (getattr(w, "title", "") or "").lower()
+                if title and any(s.lower() in title for s in title_substrings):
+                    try:
+                        if getattr(w, "isMinimized", False):
+                            w.restore()
+                        w.activate()
+                    except Exception:
+                        # some windows need a maximize/activate retry
+                        try:
+                            w.maximize()
+                        except Exception:
+                            pass
+                    time.sleep(0.4)
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _ensure_app(self, app_name, *window_titles, wait=None):
+        """Focus the app if it's already open, else launch it and wait."""
+        if self._activate(*(window_titles or (app_name,))):
+            return False  # was already open, just focused
+        self._open_app(app_name)
+        time.sleep(wait if wait is not None else self.config.get("app_open_wait", 6))
+        self._activate(*(window_titles or (app_name,)))
+        return True  # freshly launched
+
     def _click_text(self, text, timeout=0.0):
         """Find on-screen text via vision and click it. Returns True if clicked."""
         if not (self.vision and self.vision.available()):
@@ -99,8 +136,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
-        self._open_app("whatsapp")
-        time.sleep(self.config.get("app_open_wait", 6))
+        self._ensure_app("whatsapp", "whatsapp")
         # Ctrl+F focuses the WhatsApp search box
         self._hotkey("ctrl", "f")
         time.sleep(0.6)
@@ -123,8 +159,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
-        self._open_app("whatsapp")
-        time.sleep(self.config.get("app_open_wait", 6))
+        self._ensure_app("whatsapp", "whatsapp")
         self._hotkey("ctrl", "f")
         time.sleep(0.6)
         self._type(contact)
@@ -174,6 +209,7 @@ class Skills:
         """Click the 'Skip Ads' / 'Skip' button if it is on screen."""
         if not (self.vision and self.vision.available()):
             return "Ad skip ke liye vision chahiye P7: pip install pyautogui pytesseract."
+        self._activate("youtube", "- youtube")
         for label in ("Skip Ads", "Skip Ad", "Skip", "Ad skip karen", "Skip karen"):
             if self._click_text(label):
                 return "Ad skip kar diya P7."
@@ -183,6 +219,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
+        self._activate("youtube", "- youtube")
         self._hotkey("shift", "n")   # YouTube: next video
         return "Agla video chala diya P7."
 
@@ -190,6 +227,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
+        self._activate("youtube", "- youtube")
         self._hotkey("shift", "p")
         return "Pichla video chala diya P7."
 
@@ -197,6 +235,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
+        self._activate("youtube", "- youtube")
         self._press("k")             # YouTube: play/pause
         return "Video pause/play toggle kiya P7."
 
@@ -204,6 +243,7 @@ class Skills:
         err = self._need_pg()
         if err:
             return err
+        self._activate("youtube", "- youtube")
         self._press("f")
         return "Fullscreen toggle kiya P7."
 

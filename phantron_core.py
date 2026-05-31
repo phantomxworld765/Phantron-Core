@@ -847,6 +847,37 @@ def do_youtube(action, query=""):
     }.get(action, lambda: "YouTube action samajh nahi aaya P7.")()
 
 
+# ── DEEP APP AUTOMATION (script/CLI driven: blender, android, ffmpeg, python) ──
+_macro_engine = None
+
+
+def macro_engine():
+    global _macro_engine
+    if _macro_engine is None:
+        try:
+            from phantron_macros import MacroEngine
+
+            def _on_event(etype, data):
+                msg = data.get("message") or ""
+                if msg:
+                    log("macro:" + etype, msg, "info")
+                    if _server_ref:
+                        _server_ref.broadcast_threadsafe({"type": "ai_step", "message": "[macro] " + msg})
+
+            _macro_engine = MacroEngine(config=CONFIG, ai_fn=_ai_raw, on_event=_on_event)
+        except Exception:
+            _macro_engine = False
+    return _macro_engine or None
+
+
+def do_macro(app, instruction=""):
+    log("Macro", "%s: %s" % (app, str(instruction)[:50]), "tool")
+    eng = macro_engine()
+    if not eng:
+        return "Deep automation engine load nahi hua P7."
+    return eng.run(app, instruction)
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  FAST LOCAL PARSER  (instant, no AI cost)
 # ════════════════════════════════════════════════════════════════════════════
@@ -871,6 +902,20 @@ def parse_and_execute(msg):
     m = re.search(r"(?:refactor|saaf\s+kar(?:o|do)?)\s+(\S+\.\w+)\s*(?:taaki|so\s+that|:)?\s*(.*)$", msg, re.I)
     if m:
         return do_refactor(m.group(1).strip().strip("'\""), (m.group(2) or "").strip()), True
+
+    # ── DEEP APP AUTOMATION (script/CLI driven: blender/android/ffmpeg/python) ──
+    m = re.search(r"blender\s+(?:me|mein|par|pe)\s+(.+)", msg, re.I)
+    if m:
+        return do_macro("blender", m.group(1).strip()), True
+    m = re.search(r"android\s+(?:studio\s+)?build\s*(.*)$", msg, re.I)
+    if m:
+        return do_macro("android", m.group(1).strip().strip("'\"")), True
+    m = re.search(r"(?:ffmpeg|teaser\s+banao|video\s+(?:edit|convert|trim|compress|banao))\s*[:\-]?\s*(.*)$", msg, re.I)
+    if m and m.group(1).strip():
+        return do_macro("ffmpeg", m.group(1).strip()), True
+    m = re.search(r"python\s+(?:script\s+)?(?:banao|likho|bana\s+do)\s+(.+)", msg, re.I)
+    if m:
+        return do_macro("python", m.group(1).strip()), True
 
     # ── WHATSAPP ──
     m = re.search(r"whatsapp\s*(?:pe|par|me|se)?\s*(.+?)\s+ko\s+(.+?)\s+(?:bhejo|bhej\s*do|send\s*kar(?:o|do)?|likho|likh\s*do)\b", msg, re.I)
@@ -1076,6 +1121,8 @@ ACTION_SYSTEM = (
     "- app {{name}}: koi bhi app kholo (whatsapp, youtube, vscode, blender, word, excel, camera, ...)\n"
     "- whatsapp_send {{contact, message}} | whatsapp_read {{contact}}: WhatsApp Desktop par message bhejo/padho\n"
     "- youtube {{action, query}}: action = search/play/skip_ad/next/prev/pause/fullscreen\n"
+    "- macro {{app, instruction}}: DEEP automation - app=blender (bpy script), android (gradle build), "
+    "ffmpeg (video/teaser), python (script generate+run)\n"
     "Hamesha Hindi me. SIRF valid JSON output karo, aur kuch mat likho."
 )
 
@@ -1221,6 +1268,8 @@ _ACTION_DISPATCH = {
     "whatsapp_read": lambda a: do_whatsapp_read(a.get("contact") or a.get("to")),
     "youtube": lambda a: do_youtube(a.get("action", "search"),
                                     a.get("query") or a.get("song") or a.get("text", "")),
+    "macro": lambda a: do_macro(a.get("app") or a.get("name", ""),
+                                a.get("instruction") or a.get("task") or a.get("text", "")),
 }
 
 
