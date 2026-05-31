@@ -143,7 +143,26 @@ python script banao ek calculator
 
 ---
 
-## 7. 24/7 mode
+## 7. PHANTRON ko ON / OFF / PAUSE karna (safety control)
+
+Teen tarike se control kar sakte ho:
+
+| Kaam | Kaise |
+|---|---|
+| **ON karna** | `run_phantron.bat` chalao |
+| **PAUSE** (sun-na band, alive rahega) | Interface me ⏸ button, ya bolo/likho: "so jao" / "ruk jao" / "pause" |
+| **RESUME** (wapas active) | Interface me ▶ button, ya bolo: "jaag jao" / "wake up" |
+| **OFF** (poori tarah band) | Interface me ⏻ (power) button, ya bolo: "phantron band ho jao" / "shutdown" / "exit", ya `stop_phantron.bat` chalao |
+
+- **Pause** ka matlab: PHANTRON chalu rehta hai par koi command nahi maanta jab tak
+  "jaag jao" na bolo. Safety ke liye — jab nahi chahiye to turant rok do.
+- **Bahar se band karna:** `stop_phantron.bat` double-click karo. Ye `phantron.pid`
+  (jo start par bani thi) se process ko safely band kar deta hai — terminal dhundhne
+  ki zaroorat nahi.
+- **Note:** "music band karo" / "video band karo" jaise commands PHANTRON ko band
+  NAHI karte — sirf media rokte hain. Band karne ke liye "phantron band ho jao" bolo.
+
+## 8. 24/7 mode
 
 `config.json` me `"keep_awake": true` karo — PHANTRON PC ko idle-sleep/lock hone se
 rokega taaki wo hamesha command ke liye taiyaar rahe.
@@ -154,7 +173,7 @@ rokega taaki wo hamesha command ke liye taiyaar rahe.
 
 ---
 
-## 8. Common problems
+## 9. Common problems
 
 | Problem | Fix |
 |---|---|

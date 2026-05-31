@@ -40,6 +40,11 @@ multi-step tasks, and even refactors/auto-fixes its own code.
   parser so their arguments aren't hijacked by generic open/play matches.
 - **Safety first:** destructive shell commands are blocked in `agent_safe_mode`.
   Never bypass the OS lock screen (impossible + unsafe) — use `keep_awake` instead.
+- **Manual control:** `_control_intent()` detects pause/resume/shutdown from voice/
+  text; the server gates all commands on a global `PAUSED` flag. Interface has ⏸/⏻
+  buttons (send `{type:"control",action:...}`). `stop_phantron.bat` kills the process
+  via the `phantron.pid` file written on startup. Keep media commands like
+  "music band karo" OUT of the shutdown matcher.
 - **AI access** is via `_ai_raw(prompt, system)`; it auto-selects the configured
   online provider (OpenRouter `sk-or-...` or Claude `sk-ant-...`) → Ollama (local)
   → built-in offline brain. Backends: `_ask_openrouter_raw`, `_ask_claude_raw`,

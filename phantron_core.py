@@ -1709,6 +1709,49 @@ def capability_interface_note(caps):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+#  MANUAL ON / OFF / PAUSE  (safety control)
+# ════════════════════════════════════════════════════════════════════════════
+PAUSED = False  # when True, PHANTRON ignores commands until resumed
+
+
+def _control_intent(msg):
+    """Detect a manual control command. Returns 'pause' | 'resume' | 'shutdown'
+    | None. Kept precise so normal commands like 'music band karo' are NOT
+    treated as a shutdown."""
+    t = (msg or "").lower().strip()
+    if re.search(r"\b(wake up|resume|wakeup)\b", t) or any(w in t for w in
+            ["jaag jao", "jag jao", "shuru ho jao", "active ho jao", "wapas aa",
+             "chalu ho jao", "uth jao", "kaam shuru"]):
+        return "resume"
+    if re.search(r"\b(pause|sleep|standby)\b", t) or any(w in t for w in
+            ["so jao", "ruk jao", "thoda ruk", "chup ho jao", "aram karo", "ruk ja"]):
+        return "pause"
+    if re.search(r"\b(shutdown|shut down|exit|quit|turn off|power off)\b", t) or any(w in t for w in
+            ["band ho ja", "band ho jao", "khud ko band", "phantron band", "apne aap band",
+             "system band", "off ho ja", "so jao hamesha", "bye phantron"]):
+        return "shutdown"
+    return None
+
+
+PID_FILE = Path(__file__).parent / "phantron.pid"
+
+
+def _write_pid_file():
+    try:
+        PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _remove_pid_file():
+    try:
+        if PID_FILE.exists():
+            PID_FILE.unlink()
+    except Exception:
+        pass
+
+
+# ════════════════════════════════════════════════════════════════════════════
 #  SERVER
 # ════════════════════════════════════════════════════════════════════════════
 class PhantronServer:
@@ -1743,6 +1786,21 @@ class PhantronServer:
         return await self.loop.run_in_executor(None, self.process_sync, msg)
 
     async def _respond(self, msg, source="user"):
+        global PAUSED
+        # ---- manual control commands take top priority (safety) ----
+        intent = _control_intent(msg)
+        if intent:
+            await self.broadcast({"type": "user_message", "message": msg, "source": source})
+            await self.apply_control(intent)
+            return intent
+        # ---- if paused, ignore everything except a resume command ----
+        if PAUSED:
+            await self.broadcast({"type": "user_message", "message": msg, "source": source})
+            note = ("Main abhi PAUSED hoon P7. 'jaag jao' / 'wake up' bolo ya interface "
+                    "ka resume button dabao, tab kaam karunga.")
+            await self.broadcast({"type": "ai_response", "message": note})
+            return note
+
         await self.broadcast({"type": "user_message", "message": msg, "source": source})
         await self.broadcast({"type": "thinking", "state": True})
         log("Command", msg[:60], "info")
@@ -1755,6 +1813,38 @@ class PhantronServer:
         await self.broadcast({"type": "activity_update", "log": activity_log[:15]})
         speak(resp)
         return resp
+
+    # ---- manual ON/OFF/PAUSE control (interface buttons, voice, text) ----
+    async def apply_control(self, action):
+        global PAUSED
+        action = (action or "").lower().strip()
+        if action == "resume":
+            PAUSED = False
+            log("Control", "RESUME", "done")
+            await self.broadcast({"type": "state", "paused": False, "online": True})
+            msg = "PHANTRON wapas ACTIVE hai P7. Boliye."
+            await self.broadcast({"type": "ai_response", "message": msg})
+            speak(msg)
+        elif action == "pause":
+            PAUSED = True
+            log("Control", "PAUSE", "info")
+            await self.broadcast({"type": "state", "paused": True, "online": True})
+            msg = "PHANTRON PAUSED P7. Main kuch nahi karunga jab tak 'jaag jao' na bolo."
+            await self.broadcast({"type": "ai_response", "message": msg})
+            speak(msg)
+        elif action == "shutdown":
+            log("Control", "SHUTDOWN", "error")
+            await self.broadcast({"type": "ai_response", "message": "Theek hai P7, main band ho raha hoon. Bye!"})
+            await self.broadcast({"type": "state", "paused": False, "online": False})
+            speak("Theek hai P7, main band ho raha hoon. Bye!")
+            self._schedule_shutdown()
+
+    def _schedule_shutdown(self):
+        def _bye():
+            time.sleep(1.2)   # let the goodbye message + speech go out
+            _remove_pid_file()
+            os._exit(0)
+        threading.Thread(target=_bye, daemon=True).start()
 
     # ---- websocket handler (path optional for version compatibility) ----
     async def handle(self, ws, path=None):
@@ -1771,6 +1861,7 @@ class PhantronServer:
             "caps": CAPABILITIES,
             "ai_online": bool(CAPABILITIES.get("ai_ready")),
         }, ensure_ascii=False))
+        await ws.send(json.dumps({"type": "state", "paused": PAUSED, "online": True}, ensure_ascii=False))
         await ws.send(json.dumps({
             "type": "system",
             "message": capability_interface_note(CAPABILITIES),
@@ -1781,6 +1872,9 @@ class PhantronServer:
                 try:
                     d = json.loads(raw)
                 except Exception:
+                    continue
+                if d.get("type") == "control":
+                    await self.apply_control(d.get("action", ""))
                     continue
                 msg = (d.get("message") or "").strip()
                 if not msg:
@@ -1859,6 +1953,7 @@ class PhantronServer:
                     continue
                 if line.lower() in ("exit", "quit", "band karo"):
                     print("[PHANTRON] Bye P7.")
+                    _remove_pid_file()
                     os._exit(0)
                 asyncio.run_coroutine_threadsafe(self._respond(line, source="console"), self.loop)
         threading.Thread(target=_loop, daemon=True).start()
@@ -1873,6 +1968,7 @@ class PhantronServer:
         _server_ref = self
         self.loop = asyncio.get_running_loop()
         port = CONFIG.get("ws_port", 8765)
+        _write_pid_file()  # so stop_phantron.bat can shut it down from outside
 
         global CAPABILITIES
         CAPABILITIES = detect_capabilities()
@@ -1937,6 +2033,8 @@ def main():
             input("Enter dabao band karne ke liye...")
         except Exception:
             pass
+    finally:
+        _remove_pid_file()
 
 
 if __name__ == "__main__":

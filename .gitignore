@@ -20,3 +20,6 @@ Thumbs.db
 # Use config.example.json as the shareable template.
 config.json
 *.bak
+
+# PHANTRON runtime PID (created on start, used by stop_phantron.bat)
+phantron.pid

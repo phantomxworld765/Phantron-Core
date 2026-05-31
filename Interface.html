@@ -172,6 +172,18 @@
   .eq i:nth-child(4){animation-delay:.45s}.eq i:nth-child(5){animation-delay:.6s}
   @keyframes eq{0%,100%{height:5px}50%{height:22px}}
   #aiStat{padding:3px 10px;border:1px solid var(--line);border-radius:20px;font-weight:700;font-size:11px}
+  /* on/off/pause control buttons */
+  .ctrlbtn{width:34px;height:30px;border-radius:9px;background:#0c1830;color:var(--cyan);
+    border:1px solid var(--line);font-size:15px;line-height:1;transition:.15s}
+  .ctrlbtn:hover{box-shadow:0 0 12px var(--cyan);border-color:var(--cyan)}
+  .ctrlbtn.power{color:var(--red)}
+  .ctrlbtn.power:hover{box-shadow:0 0 12px var(--red);border-color:var(--red)}
+  /* PAUSED state: dim the UI + show a banner */
+  body.paused .center,body.paused .left,body.paused .right{filter:grayscale(.7) brightness(.7)}
+  #pausedBanner{position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:9999;
+    display:none;padding:8px 22px;border-radius:20px;background:#3a1d06;color:#fbbf24;
+    border:1px solid #b45309;font-size:13px;letter-spacing:2px;box-shadow:0 0 20px #f59e0b55}
+  body.paused #pausedBanner{display:block;animation:pulse 1.8s infinite}
 </style>
 </head>
 <body>
@@ -183,6 +195,7 @@
   <div id="bootlog"></div>
 </div>
 <div class="scanlines"></div>
+<div id="pausedBanner">⏸ PHANTRON PAUSED — "jaag jao" bolo ya ▶ dabao</div>
 
 <div class="grid">
 
@@ -196,6 +209,8 @@
       <span id="aiStat" title="AI brain status">AI: —</span>
       <span id="osInfo">—</span>
       <span class="clock" id="clock">--:--:--</span>
+      <button id="pauseBtn" class="ctrlbtn" title="Pause / Resume PHANTRON">⏸</button>
+      <button id="powerBtn" class="ctrlbtn power" title="PHANTRON band karo">⏻</button>
     </div>
   </header>
 
@@ -319,8 +334,32 @@ function handle(m){
     case "screen_update": updateScreen(m.img); break;
     case "activity_update": updateLog(m.log); break;
     case "capabilities": updateCaps(m); break;
+    case "state": updateState(m); break;
   }
 }
+
+/* ---- on/off/pause control ---- */
+let paused = false;
+function updateState(m){
+  paused = !!m.paused;
+  document.body.classList.toggle("paused", paused);
+  const b = $("pauseBtn");
+  b.textContent = paused ? "▶" : "⏸";
+  b.title = paused ? "Resume PHANTRON" : "Pause PHANTRON";
+  if(m.online === false){
+    setConn(false);
+    $("connTxt").textContent = "OFFLINE — PHANTRON band";
+  }
+}
+function sendControl(action){
+  if(!ws || ws.readyState !== 1){ alert("PHANTRON se connection nahi hai."); return; }
+  ws.send(JSON.stringify({type:"control", action:action}));
+}
+$("pauseBtn").onclick = () => sendControl(paused ? "resume" : "pause");
+$("powerBtn").onclick = () => {
+  if(confirm("PHANTRON ko poori tarah band karein? (Wapas chalu karne ke liye run_phantron.bat)"))
+    sendControl("shutdown");
+};
 
 /* ---- AI / capability status pill ---- */
 function updateCaps(m){
