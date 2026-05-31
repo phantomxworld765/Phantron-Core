@@ -107,6 +107,16 @@ def load_config():
 CONFIG = load_config()
 
 
+def save_config():
+    """Persist the current CONFIG back to config.json (keeps the user's keys)."""
+    try:
+        json.dump(CONFIG, open(CONFIG_FILE, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print("[CONFIG] save fail:", e)
+        return False
+
+
 def projects_dir():
     p = Path(CONFIG.get("projects_dir") or (Path.home() / "Phantron" / "Projects"))
     p.mkdir(parents=True, exist_ok=True)
@@ -881,6 +891,101 @@ def do_macro(app, instruction=""):
     return eng.run(app, instruction)
 
 
+# ── MODEL SWITCH + STATUS (runtime, no config editing needed) ───────────────
+MODEL_MAP = {
+    "opus": "anthropic/claude-opus-4.8",
+    "sonnet": "anthropic/claude-sonnet-4.6",
+    "haiku": "anthropic/claude-haiku-4.5",
+    "qwen": "qwen/qwen-2.5-72b-instruct",
+    "deepseek": "deepseek/deepseek-chat",
+    "llama": "meta-llama/llama-3.3-70b-instruct",
+    "gemini": "google/gemini-2.0-flash-001",
+    "gpt": "openai/gpt-4o",
+    "free": "deepseek/deepseek-chat-v3:free",
+}
+
+
+def _model_switch_intent(msg):
+    """Detect 'X use karo / switch to X' for a known model. Returns key or None."""
+    t = (msg or "").lower()
+    verb = bool(re.search(r"\b(use\s*kar|switch|laga|badlo|chala|pe\s+(aa|chal|switch)|par\s+chal)\b", t)
+                or "use karo" in t)
+    if not verb:
+        return None
+    if "free model" in t or "free wala" in t:
+        return "free"
+    if any(x in t for x in ["ollama", "local model", "offline model"]):
+        return "ollama"
+    for k in ["opus", "sonnet", "haiku", "qwen", "deepseek", "llama", "gemini", "gpt"]:
+        if k in t:
+            return k
+    return None
+
+
+def _refresh_caps():
+    global CAPABILITIES
+    try:
+        CAPABILITIES = detect_capabilities()
+        if _server_ref:
+            _server_ref.broadcast_threadsafe({"type": "capabilities", "caps": CAPABILITIES,
+                                              "ai_online": bool(CAPABILITIES.get("ai_ready"))})
+    except Exception:
+        pass
+
+
+def do_model_list():
+    cur = CONFIG.get("openrouter_model") if CONFIG.get("ai_mode") == "openrouter" else CONFIG.get("ai_mode")
+    return ("Available models P7 (bolo 'X use karo'):\n"
+            "- opus / sonnet / haiku  (Claude via OpenRouter)\n"
+            "- qwen / deepseek / llama / gemini / gpt\n"
+            "- 'free model'  (sasta/free)\n"
+            "- 'ollama'  (local, free, offline)\n"
+            "Abhi chal raha hai: " + str(cur))
+
+
+def do_switch_model(target):
+    log("Model switch", target, "tool")
+    t = (target or "").lower().strip()
+    if any(x in t for x in ["ollama", "local", "offline"]):
+        CONFIG["ai_mode"] = "ollama"
+        save_config()
+        _refresh_caps()
+        return "Ab Ollama (local, free) brain use karunga P7. (Ollama chal raha ho ye check karna.)"
+    key = None
+    for k in MODEL_MAP:
+        if k in t:
+            key = k
+            break
+    if not key:
+        return do_model_list()
+    if not CONFIG.get("openrouter_api_key"):
+        return ("'%s' ke liye OpenRouter key chahiye P7 (config.json -> openrouter_api_key). "
+                "Ya 'ollama use karo' bolo (free)." % key)
+    CONFIG["ai_mode"] = "openrouter"
+    CONFIG["openrouter_model"] = MODEL_MAP[key]
+    save_config()
+    _refresh_caps()
+    return "Ab brain '%s' (%s) par switch kar diya P7." % (key, MODEL_MAP[key])
+
+
+def do_status():
+    """PHANTRON ka self-check - kya kaam kar raha hai, kya nahi."""
+    log("Status", "self-check", "tool")
+    caps = detect_capabilities()
+    lines = capability_summary(caps)
+    fixes = []
+    if not caps.get("ai_ready"):
+        fixes.append("AI brain OFF - OpenRouter key ya Ollama lagao.")
+    if not caps.get("automation"):
+        fixes.append("pyautogui missing - app/mouse/screenshot off (pip install -r requirements.txt).")
+    if not caps.get("metrics"):
+        fixes.append("psutil missing - gauges off.")
+    out = "PHANTRON STATUS P7:\n" + "\n".join(lines)
+    if fixes:
+        out += "\n\nTheek karna hai:\n- " + "\n- ".join(fixes)
+    return out
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  FAST LOCAL PARSER  (instant, no AI cost)
 # ════════════════════════════════════════════════════════════════════════════
@@ -905,6 +1010,16 @@ def parse_and_execute(msg):
     m = re.search(r"(?:refactor|saaf\s+kar(?:o|do)?)\s+(\S+\.\w+)\s*(?:taaki|so\s+that|:)?\s*(.*)$", msg, re.I)
     if m:
         return do_refactor(m.group(1).strip().strip("'\""), (m.group(2) or "").strip()), True
+
+    # ── MODEL list / switch  &  STATUS / self-check ──
+    if re.search(r"\bmodel", ml) and re.search(r"\b(list|kaun\s*se|kon\s*se|available|kya\s*kya)\b", ml):
+        return do_model_list(), True
+    _mt = _model_switch_intent(msg)
+    if _mt:
+        return do_switch_model(_mt), True
+    if any(x in ml for x in ["self check", "self-check", "diagnose", "status batao", "system status",
+                             "phantron status", "health check", "kya kya kaam kar", "capability"]):
+        return do_status(), True
 
     # ── DEEP APP AUTOMATION (script/CLI driven: blender/android/ffmpeg/python) ──
     m = re.search(r"blender\s+(?:me|mein|par|pe)\s+(.+)", msg, re.I)
@@ -1126,6 +1241,8 @@ ACTION_SYSTEM = (
     "- youtube {{action, query}}: action = search/play/skip_ad/next/prev/pause/fullscreen\n"
     "- macro {{app, instruction}}: DEEP automation - app=blender (bpy script), android (gradle build), "
     "ffmpeg (video/teaser), python (script generate+run)\n"
+    "- switch_model {{target}}: AI brain badlo (opus/sonnet/haiku/qwen/deepseek/llama/gemini/gpt/free/ollama)\n"
+    "- status {{}}: PHANTRON ka self-check (kya kaam kar raha hai)\n"
     "Hamesha Hindi me. SIRF valid JSON output karo, aur kuch mat likho."
 )
 
@@ -1323,6 +1440,8 @@ _ACTION_DISPATCH = {
                                     a.get("query") or a.get("song") or a.get("text", "")),
     "macro": lambda a: do_macro(a.get("app") or a.get("name", ""),
                                 a.get("instruction") or a.get("task") or a.get("text", "")),
+    "switch_model": lambda a: do_switch_model(a.get("target") or a.get("model") or a.get("text", "")),
+    "status": lambda a: do_status(),
 }
 
 
