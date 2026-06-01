@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PHANTRON</title>
+<style>
+  :root{
+    --bg:#05070d; --panel:#0a0f1c; --line:#10243a;
+    --cyan:#00f0ff; --cyan-dim:#0a7c8a; --magenta:#ff2bd6; --green:#39ff14;
+    --txt:#cfeeff; --muted:#5b7a93; --warn:#ffb000;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Consolas","SF Mono",ui-monospace,monospace;
+    background:radial-gradient(1200px 700px at 70% -10%,#0c1830 0,var(--bg) 60%);
+    color:var(--txt); overflow:hidden;
+  }
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:repeating-linear-gradient(0deg,rgba(0,240,255,.03) 0 1px,transparent 1px 3px);
+    mix-blend-mode:screen;}
+  .wrap{display:grid;grid-template-columns:300px 1fr;grid-template-rows:64px 1fr;
+    height:100vh;gap:1px;background:var(--line)}
+  header{grid-column:1/3;background:var(--panel);display:flex;align-items:center;
+    justify-content:space-between;padding:0 22px}
+  .logo{display:flex;align-items:center;gap:14px}
+  .orb{width:30px;height:30px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#aef9ff,var(--cyan) 45%,#003b45 100%);
+    box-shadow:0 0 18px var(--cyan),0 0 40px var(--cyan-dim);animation:pulse 2.6s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.12);opacity:1}}
+  .logo h1{font-size:22px;letter-spacing:8px;color:#eafcff;
+    text-shadow:0 0 12px var(--cyan)}
+  .logo small{display:block;letter-spacing:3px;color:var(--muted);font-size:10px}
+  .hstat{display:flex;gap:18px;align-items:center;font-size:12px}
+  .pill{padding:5px 12px;border:1px solid var(--line);border-radius:20px;
+    color:var(--muted);background:#070c16}
+  .pill b{color:var(--cyan)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+    background:var(--green);box-shadow:0 0 8px var(--green);margin-right:6px}
+  .dot.off{background:#ff3b3b;box-shadow:0 0 8px #ff3b3b}
+
+  aside{background:var(--panel);padding:16px;overflow-y:auto}
+  .sect{font-size:11px;letter-spacing:2px;color:var(--cyan-dim);
+    margin:6px 0 10px;text-transform:uppercase}
+  .feed{display:flex;flex-direction:column;gap:8px}
+  .ev{font-size:12px;border-left:2px solid var(--line);padding:6px 10px;
+    background:#070c16;border-radius:0 6px 6px 0;animation:slide .25s ease}
+  @keyframes slide{from{opacity:0;transform:translateX(-8px)}to{opacity:1}}
+  .ev .k{color:var(--cyan);letter-spacing:1px;font-size:10px;text-transform:uppercase}
+  .ev .d{color:var(--muted);word-break:break-word}
+  .ev.thought{border-color:var(--magenta)} .ev.thought .k{color:var(--magenta)}
+  .ev.tool{border-color:var(--cyan)}
+  .ev.speak,.ev.listen{border-color:var(--green)} .ev.speak .k{color:var(--green)}
+  .ev.error{border-color:#ff3b3b} .ev.error .k{color:#ff3b3b}
+
+  main{display:flex;flex-direction:column;background:var(--bg);min-height:0}
+  #chat{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:78%;padding:12px 16px;border-radius:12px;line-height:1.5;
+    font-size:14px;animation:slide .25s ease;white-space:pre-wrap;word-break:break-word}
+  .msg.me{align-self:flex-end;background:linear-gradient(135deg,#10243a,#0a1828);
+    border:1px solid var(--cyan-dim);color:#eafcff}
+  .msg.ai{align-self:flex-start;background:#080d18;border:1px solid var(--line);
+    border-left:3px solid var(--cyan)}
+  .msg .who{font-size:10px;letter-spacing:2px;color:var(--muted);
+    text-transform:uppercase;margin-bottom:4px}
+  .msg.ai .who{color:var(--cyan)}
+
+  .typing{align-self:flex-start;display:flex;gap:5px;padding:14px 16px}
+  .typing span{width:8px;height:8px;border-radius:50%;background:var(--cyan);
+    animation:blink 1.2s infinite}
+  .typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+  .bar{display:flex;gap:10px;padding:16px;border-top:1px solid var(--line);
+    background:var(--panel)}
+  #input{flex:1;background:#070c16;border:1px solid var(--line);border-radius:10px;
+    color:var(--txt);padding:14px 16px;font-family:inherit;font-size:14px;outline:none}
+  #input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,240,255,.15)}
+  button{cursor:pointer;border:none;border-radius:10px;font-family:inherit;
+    font-weight:bold;letter-spacing:1px;padding:0 20px;font-size:13px;transition:.15s}
+  .send{background:linear-gradient(135deg,var(--cyan),#0094a8);color:#021016}
+  .send:hover{box-shadow:0 0 16px var(--cyan)}
+  .mic{background:#070c16;border:1px solid var(--line);color:var(--cyan);width:54px}
+  .mic.on{background:var(--magenta);color:#13000f;box-shadow:0 0 16px var(--magenta)}
+  ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+<div class="scan"></div>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <div class="orb"></div>
+      <div><h1>PHANTRON</h1><small id="sub">booting…</small></div>
+    </div>
+    <div class="hstat">
+      <span class="pill"><span class="dot" id="brainDot"></span>BRAIN <b id="brainName">…</b></span>
+      <span class="pill">VOICE <b id="voiceName">…</b></span>
+      <span class="pill">VISION <b id="visionName">…</b></span>
+      <span class="pill" id="modePill">MODE <b id="modeName">…</b></span>
+    </div>
+  </header>
+
+  <aside>
+    <div class="sect">// Live Activity</div>
+    <div class="feed" id="feed"></div>
+  </aside>
+
+  <main>
+    <div id="chat"></div>
+    <div class="bar">
+      <input id="input" placeholder="Bolo P7… (e.g. 'open youtube', 'play lofi', or just chat)" autocomplete="off"/>
+      <button class="mic" id="mic" title="Toggle voice">MIC</button>
+      <button class="send" id="send">SEND ▸</button>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const chat = $("#chat"), feed = $("#feed");
+let lastEventId = 0, voiceOn = false, busy = false;
+
+function addMsg(text, who){
+  const m = document.createElement("div");
+  m.className = "msg " + (who === "me" ? "me" : "ai");
+  m.innerHTML = '<div class="who">'+(who==="me"?"P7":"PHANTRON")+'</div>';
+  const body = document.createElement("div"); body.textContent = text;
+  m.appendChild(body); chat.appendChild(m); chat.scrollTop = chat.scrollHeight;
+}
+function typing(on){
+  let t = $("#typing");
+  if(on && !t){ t=document.createElement("div"); t.id="typing"; t.className="typing";
+    t.innerHTML="<span></span><span></span><span></span>"; chat.appendChild(t);
+    chat.scrollTop=chat.scrollHeight; }
+  else if(!on && t){ t.remove(); }
+}
+function addEvent(e){
+  const allow=["thought","tool","speak","listen","error","voice"];
+  if(!allow.includes(e.kind)) return;
+  const d=document.createElement("div"); d.className="ev "+e.kind;
+  d.innerHTML='<div class="k">'+e.action+'</div><div class="d">'+(e.detail||"")+'</div>';
+  feed.appendChild(d);
+  while(feed.children.length>60) feed.removeChild(feed.firstChild);
+  feed.scrollTop=feed.scrollHeight;
+}
+
+async function send(){
+  const input=$("#input"); const text=input.value.trim();
+  if(!text||busy) return;
+  input.value=""; addMsg(text,"me"); busy=true; typing(true);
+  try{
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text, speak:voiceOn})});
+    const j=await r.json(); typing(false);
+    if(j.reply) addMsg(j.reply,"ai");
+  }catch(err){ typing(false); addMsg("Connection error: "+err,"ai"); }
+  busy=false; input.focus();
+}
+
+async function loadStatus(){
+  try{
+    const s=await (await fetch("/api/status")).json();
+    $("#sub").textContent = s.user_name+" · v"+s.version;
+    $("#brainName").textContent = s.brain.provider+" ("+s.brain.model+")";
+    $("#voiceName").textContent = s.voice.tts!=="none" ? (s.voice.stt!=="none"?"full":"speak") : "text";
+    $("#visionName").textContent = s.vision ? (s.vision.ocr?"see+read":(s.vision.capture?"see":"off")) : "off";
+    $("#modeName").textContent = s.autonomous ? "AUTONOMOUS" : "CHAT";
+    const off = s.brain.provider==="offline";
+    $("#brainDot").className = "dot"+(off?" off":"");
+  }catch(e){}
+}
+
+async function pollEvents(){
+  try{
+    const r=await fetch("/api/events?after="+lastEventId);
+    const j=await r.json();
+    (j.events||[]).forEach(e=>{
+      lastEventId=Math.max(lastEventId,e.id);
+      if(e.kind==="reply" && e.action==="PHANTRON"){ /* greeting / async reply */
+        if(!busy) addMsg(e.detail,"ai");
+      } else { addEvent(e); }
+    });
+  }catch(e){ await new Promise(r=>setTimeout(r,1500)); }
+  pollEvents();
+}
+
+async function toggleVoice(){
+  voiceOn=!voiceOn;
+  $("#mic").classList.toggle("on",voiceOn);
+  try{ await fetch("/api/voice",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({start:voiceOn})}); }catch(e){}
+}
+
+$("#send").onclick=send;
+$("#mic").onclick=toggleVoice;
+$("#input").addEventListener("keydown",e=>{ if(e.key==="Enter") send(); });
+loadStatus(); setInterval(loadStatus,5000); pollEvents(); $("#input").focus();
+</script>
+</body>
+</html>

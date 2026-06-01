@@ -1,36 +1,80 @@
 {
-  "ai_mode": "ollama",
-  "claude_api_key": "",
-  "claude_model": "claude-haiku-4-5-20251001",
-  "ollama_model": "llama3",
-  "ollama_url": "http://localhost:11434/api/generate",
-  "ws_port": 8765,
   "user_name": "P7",
   "assistant_name": "PHANTRON",
-  "wake_word": "phantron",
-
-  "voice_output_enabled": true,
-  "voice_input_enabled": true,
-  "tts_engine": "auto",
-  "tts_voice_edge": "hi-IN-MadhurNeural",
-  "stt_language": "hi-IN",
-
-  "autonomous": true,
-  "max_agent_steps": 6,
-  "open_interface": true,
-
-  "screen_broadcast": true,
-  "screen_interval_sec": 4,
-  "metrics_interval_sec": 2,
-
-  "projects_dir": "D:\\Phantron\\Projects",
-  "files_dir": "D:\\Phantron\\Files",
-
-  "agent_max_steps": 12,
-  "agent_max_fix_attempts": 3,
-  "agent_command_timeout": 900,
-  "agent_safe_mode": true,
-  "agent_allow_shutdown": false,
-  "unreal_engine_dir": "",
-  "android_sdk_dir": ""
+  "language": "hinglish",
+  "brain": {
+    "provider": "auto",
+    "temperature": 0.6,
+    "max_tokens": 1024,
+    "memory_turns": 12,
+    "vision_model": "",
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "",
+      "model": "meta-llama/llama-3.1-8b-instruct:free"
+    },
+    "ollama": {
+      "url": "http://localhost:11434",
+      "model": "llama3.1"
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "",
+      "model": "gpt-4o-mini"
+    },
+    "anthropic": {
+      "api_key": "",
+      "model": "claude-3-5-sonnet-latest"
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8770,
+    "open_browser": true
+  },
+  "voice": {
+    "input": true,
+    "output": true,
+    "wake_word": "phantron",
+    "stt_language": "en-IN",
+    "engine": "auto",
+    "rate": 178,
+    "volume": 1.0,
+    "vosk_model": "",
+    "voice_hindi": "",
+    "voice_english": "",
+    "mixed_speech": true
+  },
+  "vision": {
+    "tesseract_cmd": ""
+  },
+  "agent": {
+    "autonomous": true,
+    "max_steps": 6,
+    "safe_mode": true,
+    "allow_shutdown": false,
+    "command_timeout": 120,
+    "self_heal": true
+  },
+  "security": {
+    "auto_audit_on_start": false,
+    "alert_on_threat": true
+  },
+  "messaging": {
+    "telegram": {
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "email": {
+      "address": "",
+      "app_password": "",
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "imap_host": "imap.gmail.com"
+    }
+  },
+  "paths": {
+    "projects_dir": "",
+    "files_dir": ""
+  }
 }

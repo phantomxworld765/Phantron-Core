@@ -1,32 +1,53 @@
-# ── PHANTRON v7 dependencies ─────────────────────────────────
-# Core (required)
-websockets>=11.0
-psutil>=5.9.0
-requests>=2.31.0
+# ─────────────────────────────────────────────────────────────
+#  PHANTRON v2 dependencies
+#
+#  THE CORE NEEDS NOTHING FROM THIS FILE.
+#  `python -m phantron` boots on the Python standard library alone:
+#  web UI, chat, app launching, web search, files and shell all work.
+#
+#  Install the extras below ONLY for the features you want. Each one is
+#  optional and PHANTRON skips it gracefully if it is missing.
+# ─────────────────────────────────────────────────────────────
 
-# Screen + device control (required for automation)
+# --- System info (CPU / RAM / battery) ---
+psutil>=5.9.0
+
+# --- Screen + mouse/keyboard automation, screenshots ---
 pyautogui>=0.9.54
 Pillow>=10.0.0
 
-# Voice input (optional - assistant still works on text without these)
+# --- Voice INPUT (microphone -> text) ---
 SpeechRecognition>=3.10.0
-# pyaudio is needed for the microphone. On Windows: pip install pyaudio
-# If pyaudio fails to build, install a prebuilt wheel:
+# PyAudio drives the mic. On Windows, if it fails to build:
 #   pip install pipwin && pipwin install pyaudio
 pyaudio>=0.2.13
 
-# Audio signal processing / DSP (wake-word energy gating, resampling, filters)
-sounddevice>=0.4.6
-numpy>=1.24.0
-scipy>=1.10.0
-
-# Voice output / TTS (any one of these works; auto-detected at runtime)
+# --- Voice OUTPUT (text -> speech), offline + cross-platform ---
 pyttsx3>=2.90
-edge-tts>=6.1.9
-pygame>=2.5.0
-
-# Windows-only native TTS (best Hindi voice, no extra download)
+# Windows-only native voices (optional, good Hindi voice):
 pywin32>=306 ; sys_platform == "win32"
 
-# Optional cloud AI (only used if claude_api_key is set in config.json)
-anthropic>=0.39.0
+# --- Offline speech-to-text (optional, no internet) ---
+# Download a model from https://alphacephei.com/vosk/models and set
+# voice.vosk_model in config.json to its folder.
+vosk>=0.3.45
+
+# --- Vision: screen capture + OCR (read what's on screen) ---
+mss>=9.0.1
+pytesseract>=0.3.10
+# pytesseract also needs the Tesseract ENGINE installed separately:
+#   Windows: https://github.com/UB-Mannheim/tesseract/wiki
+#   then set vision.tesseract_cmd in config.json
+
+# --- Clipboard access ---
+pyperclip>=1.8.2
+
+# --- WhatsApp instant send (optional; else WhatsApp Web opens pre-filled) ---
+pywhatkit>=5.4
+
+# NOTE: messaging/email need NO extra package - Telegram uses urllib and email
+# uses Python's built-in smtplib/imaplib. Just fill config.json.
+#
+# The "brain" needs NO python package.
+#   * Local + free : install Ollama from https://ollama.com (separate app)
+#   * Cloud        : just put an API key in config.json (uses urllib directly)
