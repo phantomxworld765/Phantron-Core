@@ -82,11 +82,13 @@ def _extract_json(text: str) -> Optional[dict]:
 
 class Agent:
     def __init__(self, cfg, brain: Brain, skills: Skills,
-                 on_event: Optional[Callable[[str, str, str], None]] = None):
+                 on_event: Optional[Callable[[str, str, str], None]] = None,
+                 memory=None):
         self.cfg = cfg
         self.brain = brain
         self.skills = skills
         self.on_event = on_event
+        self.memory = memory
         self.history: List[Dict[str, str]] = []
 
     def _emit(self, action: str, detail: str = "", kind: str = "thought"):
@@ -125,8 +127,16 @@ class Agent:
     #  Brain-driven autonomous loop
     # ─────────────────────────────────────────────────────────────────────
     def _system_prompt(self) -> str:
+        mem_block = ""
+        if self.memory:
+            facts = self.memory.facts_block()
+            recap = self.memory.recent_context(6)
+            if facts:
+                mem_block += "\n\nKnown facts about the user (use them naturally):\n" + facts
+            if recap:
+                mem_block += "\n\nRecent conversation recap (for continuity):\n" + recap
         return (
-            _persona(self.cfg) + "\n\n"
+            _persona(self.cfg) + mem_block + "\n\n"
             "You can ACT on the user's Windows PC by calling tools. Decide each "
             "step and reply with ONE json object only, no extra prose.\n\n"
             "Available tools:\n" + _tool_catalogue() + "\n\n"
@@ -135,9 +145,11 @@ class Agent:
             '"args":{...},"say":"short line to tell the user now (optional)"}\n'
             '  {"thought":"why","action":"speak","text":"final reply to the user"}\n\n'
             "Rules: use a tool only when the user wants something DONE. For normal "
-            "chat, questions or coding help, just use \"speak\". After a tool runs "
-            "you will get its result; then either call another tool or speak. Keep "
-            "spoken text concise and in the user's language."
+            "chat, questions or coding help, just use \"speak\". If the user shares "
+            "something worth remembering long-term (their name, preferences, setup), "
+            "use the remember tool. After a tool runs you will get its result; then "
+            "either call another tool or speak. Keep spoken text concise and in the "
+            "user's language."
         )
 
     def _handle_with_brain(self, user_text: str) -> str:
@@ -244,6 +256,20 @@ class Agent:
 
         if re.search(r"\b(screenshot|screen shot|capture screen)\b", t):
             return self.skills.screenshot()
+
+        if re.search(r"\b(read screen|screen padho|screen pe kya|what.s on screen)\b", t):
+            return self.skills.read_screen()
+        if re.search(r"\b(see screen|screen dekho|look at screen|describe screen)\b", t):
+            return self.skills.see_screen()
+
+        m = re.search(r"\bremember\s+(?:that\s+)?(.+?)\s+(?:is|=|hai)\s+(.+)", t)
+        if m:
+            return self.skills.remember(m.group(1).strip(), m.group(2).strip(" .!"))
+        m = re.search(r"(?:what'?s my|what is my|recall|yaad hai|mera|meri)\s+(.+)", t)
+        if m:
+            ans = self.skills.recall(m.group(1).strip(" ?.!"))
+            if ans and "kuch yaad nahi" not in ans:
+                return ans
 
         if re.search(r"\bvolume up|awaaz badha", t):
             return self.skills.media("volume_up")

@@ -40,6 +40,9 @@ DEFAULTS: Dict[str, Any] = {
         "max_tokens": 1024,
         # how many recent turns of conversation to remember
         "memory_turns": 12,
+        # optional separate model for image understanding (vision). Leave empty
+        # to reuse the main model. e.g. "gpt-4o-mini", "llava", "claude-3-5-sonnet-latest"
+        "vision_model": "",
 
         # Local, free, private. Install from https://ollama.com then:
         #   ollama pull llama3.1     (or qwen2.5, mistral, etc.)
@@ -78,7 +81,17 @@ DEFAULTS: Dict[str, Any] = {
         "output": True,           # speak replies (needs a TTS engine)
         "wake_word": "phantron",
         "stt_language": "en-IN",  # speech-to-text language hint
-        "tts_voice": "",          # leave empty for the system default voice
+        "tts_voice": "",          # leave empty for auto Hindi/Indian voice pick
+        "engine": "auto",         # "auto" | "pyttsx3" | "sapi"
+        "rate": 178,              # speaking speed (words/min-ish)
+        "volume": 1.0,            # 0.0 - 1.0
+        "vosk_model": "",         # path to a Vosk model folder for offline STT
+    },
+
+    "vision": {
+        # Path to the Tesseract executable for OCR. On Windows usually:
+        # C:\\Program Files\\Tesseract-OCR\\tesseract.exe
+        "tesseract_cmd": "",
     },
 
     "agent": {

@@ -16,7 +16,9 @@ from typing import Callable, List, Optional
 from .agent import Agent
 from .brain import Brain
 from .config import Config, load_config
+from .memory import Memory
 from .skills import Skills
+from .vision import Vision
 from .voice import Voice
 
 
@@ -28,8 +30,12 @@ class Assistant:
         self._listeners: List[Callable[[dict], None]] = []
 
         self.brain = Brain(self.cfg)
-        self.skills = Skills(self.cfg, on_event=self._event)
-        self.agent = Agent(self.cfg, self.brain, self.skills, on_event=self._event)
+        self.memory = Memory(self.cfg)
+        self.vision = Vision(self.cfg, brain=self.brain, on_event=self._event)
+        self.skills = Skills(self.cfg, on_event=self._event,
+                             vision=self.vision, memory=self.memory)
+        self.agent = Agent(self.cfg, self.brain, self.skills,
+                           on_event=self._event, memory=self.memory)
         self.voice = Voice(self.cfg, on_event=self._event)
 
         self._voice_thread: Optional[threading.Thread] = None
@@ -58,7 +64,9 @@ class Assistant:
     #  Core
     # ─────────────────────────────────────────────────────────────────────
     def chat(self, text: str, speak: bool = False) -> str:
+        self.memory.add_journal("P7", text)
         reply = self.agent.handle(text)
+        self.memory.add_journal("PHANTRON", reply)
         if speak and self.voice.can_speak and reply:
             threading.Thread(target=self.voice.speak, args=(reply,), daemon=True).start()
         return reply
@@ -71,6 +79,11 @@ class Assistant:
             "version": __import__("phantron").__version__,
             "brain": b,
             "voice": self.voice.status(),
+            "vision": {
+                "capture": self.vision.can_capture,
+                "ocr": self.vision.can_ocr,
+            },
+            "memory_facts": len(self.memory.facts),
             "autonomous": bool(self.cfg.get("agent.autonomous", True)),
         }
 

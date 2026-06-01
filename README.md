@@ -90,10 +90,31 @@ If `pyaudio` won't install on Windows:
 
 `open_app`, `play_song`, `web_search`, `system_info`, `media`, `screenshot`,
 `mouse`, `type_text`, `press_key`, `create_file`, `read_file`, `list_dir`,
-`run_command`, `tell_time`.
+`run_command`, `tell_time`, `see_screen`, `read_screen`, `click_text`,
+`remember`, `recall`, `forget`, `clipboard`, `hotkey`, `window`, `write_in`.
 
 In **autonomous** mode the brain decides which tools to call and can chain a
 few of them to finish a request, then replies to you.
+
+### Vision (PHANTRON can SEE the screen)
+- `read_screen` — OCR the whole screen to text.
+- `see_screen` — ask a vision-capable model what's on screen (or fall back to OCR).
+- `click_text` — find on-screen text and click it.
+
+Needs `mss` + `pytesseract` (and the Tesseract engine installed). For
+`see_screen` with a vision model, set `brain.vision_model` (e.g. `gpt-4o-mini`,
+`llava`, `claude-3-5-sonnet-latest`).
+
+### Memory (PHANTRON remembers across sessions)
+Facts you tell it ("remember that my gpu is RTX 4060") persist to
+`~/Phantron/memory/facts.json`, and a rolling conversation journal keeps
+continuity between runs. Recall with "what's my gpu" or the `recall` tool.
+
+### Voice (advanced)
+- Auto-picks a Hindi/Indian-English voice when available; tune `voice.rate`,
+  `voice.volume`, `voice.tts_voice`, `voice.engine`.
+- Offline speech-to-text via **Vosk** (set `voice.vosk_model` to a model
+  folder) — no internet needed; otherwise free Google web STT is used.
 
 ---
 
@@ -103,10 +124,12 @@ few of them to finish a request, then replies to you.
 phantron/
   __main__.py    entry point (web UI / --cli / --voice)
   config.py      config.json loading + sane defaults
-  brain.py       multi-provider LLM client (stdlib only)
+  brain.py       multi-provider LLM client + vision (stdlib only)
   skills.py      the concrete actions + safety guard
-  agent.py       decision loop (think -> act -> speak)
-  voice.py       optional speech in/out
+  agent.py       decision loop (think -> act -> speak), memory-aware
+  memory.py      persistent facts + conversation journal
+  vision.py      screen capture, OCR, find/click text, describe
+  voice.py       advanced speech in/out (Vosk offline STT + smart TTS)
   assistant.py   orchestrator wiring it all together
   server.py      stdlib web server + JSON API
   ui/index.html  the cyberpunk interface

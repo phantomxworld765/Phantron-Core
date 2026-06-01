@@ -107,9 +107,12 @@ def _psutil():
 
 
 class Skills:
-    def __init__(self, cfg, on_event: Optional[Callable[[str, str, str], None]] = None):
+    def __init__(self, cfg, on_event: Optional[Callable[[str, str, str], None]] = None,
+                 vision=None, memory=None):
         self.cfg = cfg
         self.on_event = on_event
+        self.vision = vision
+        self.memory = memory
         self.guard = SafetyGuard(
             enabled=bool(cfg.get("agent.safe_mode", True)),
             allow_shutdown=bool(cfg.get("agent.allow_shutdown", False)),
@@ -372,6 +375,115 @@ class Skills:
         return datetime.now().strftime("Abhi %I:%M %p, %A %d %B %Y hai.")
 
     # ─────────────────────────────────────────────────────────────────────
+    #  Vision (see + read the screen)
+    # ─────────────────────────────────────────────────────────────────────
+    def see_screen(self, question: str = "What is on the screen right now?") -> str:
+        if not self.vision:
+            return "Vision module load nahi hua."
+        return self.vision.describe(question)
+
+    def read_screen(self, _: str = "") -> str:
+        if not self.vision:
+            return "Vision module load nahi hua."
+        return self.vision.read_screen()
+
+    def click_text(self, text: str = "") -> str:
+        """Find on-screen text via OCR and click it."""
+        if not self.vision:
+            return "Vision module load nahi hua."
+        if not text:
+            return "Kis text pe click karun?"
+        spot = self.vision.find_text(text)
+        if not spot:
+            return "Screen pe '%s' nahi mila." % text
+        return self.mouse("click", spot[0], spot[1])
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Memory
+    # ─────────────────────────────────────────────────────────────────────
+    def remember(self, key: str = "", value: str = "") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        return self.memory.remember(key, value)
+
+    def recall(self, key: str = "") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        return self.memory.recall(key)
+
+    def forget(self, key: str = "") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        return self.memory.forget(key)
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Clipboard, hotkeys, window control
+    # ─────────────────────────────────────────────────────────────────────
+    def clipboard(self, action: str = "get", text: str = "") -> str:
+        try:
+            import pyperclip
+            if action == "set":
+                pyperclip.copy(text or "")
+                return "Clipboard set."
+            return pyperclip.paste() or "(clipboard empty)"
+        except Exception:
+            # fallback to OS tools
+            try:
+                if IS_WINDOWS and action == "get":
+                    out = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
+                                         capture_output=True, text=True, timeout=10)
+                    return (out.stdout or "").strip() or "(clipboard empty)"
+            except Exception:
+                pass
+            return "Clipboard ke liye pyperclip chahiye (pip install pyperclip)."
+
+    def hotkey(self, keys: str = "") -> str:
+        """Press a combo like 'ctrl+s', 'alt+tab', 'win+d'."""
+        pag = _pyautogui()
+        if not pag:
+            return "Hotkey ke liye pyautogui chahiye."
+        combo = [k.strip().lower() for k in re.split(r"[+\s]+", keys or "") if k.strip()]
+        if not combo:
+            return "Konsa combo?"
+        try:
+            pag.hotkey(*combo)
+            return "+".join(combo) + " press kiya."
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def window(self, action: str = "minimize") -> str:
+        """Window control via global hotkeys (Windows)."""
+        pag = _pyautogui()
+        if not pag:
+            return "Window control ke liye pyautogui chahiye."
+        act = (action or "").lower()
+        try:
+            if act in ("minimize", "min"):
+                pag.hotkey("win", "down"); return "Window minimize."
+            if act in ("maximize", "max"):
+                pag.hotkey("win", "up"); return "Window maximize."
+            if act in ("close",):
+                pag.hotkey("alt", "f4"); return "Window band."
+            if act in ("switch", "alt_tab"):
+                pag.hotkey("alt", "tab"); return "Switched."
+            if act in ("show_desktop", "desktop"):
+                pag.hotkey("win", "d"); return "Desktop."
+            if act in ("snap_left", "left"):
+                pag.hotkey("win", "left"); return "Snapped left."
+            if act in ("snap_right", "right"):
+                pag.hotkey("win", "right"); return "Snapped right."
+            return "Unknown window action: " + act
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def write_in(self, text: str = "", enter: Any = False) -> str:
+        """Type text into the focused field, optionally pressing Enter."""
+        res = self.type_text(text)
+        if enter in (True, "true", "1", 1):
+            self.press_key("enter")
+        return res
+
+    # ─────────────────────────────────────────────────────────────────────
     #  Dispatch
     # ─────────────────────────────────────────────────────────────────────
     def execute(self, tool: str, args: Dict[str, Any]) -> str:
@@ -382,7 +494,8 @@ class Skills:
             return fn(**(args or {}))
         except TypeError:
             # tolerate a single positional-style arg under common keys
-            for key in ("target", "query", "text", "command", "action", "path"):
+            for key in ("target", "query", "text", "command", "action", "path",
+                        "question", "keys", "value", "key"):
                 if key in (args or {}):
                     return fn(args[key])
             return fn()
@@ -406,4 +519,14 @@ TOOLS: List[Dict[str, str]] = [
     {"name": "list_dir", "args": "path", "desc": "List files in a folder"},
     {"name": "run_command", "args": "command,shell", "desc": "Run a shell command (PowerShell on Windows)"},
     {"name": "tell_time", "args": "", "desc": "Tell the current date and time"},
+    {"name": "see_screen", "args": "question", "desc": "Look at the screen and describe/answer about it (vision)"},
+    {"name": "read_screen", "args": "", "desc": "OCR: read all text currently on the screen"},
+    {"name": "click_text", "args": "text", "desc": "Find on-screen text and click it"},
+    {"name": "remember", "args": "key,value", "desc": "Permanently remember a fact about the user"},
+    {"name": "recall", "args": "key", "desc": "Recall a remembered fact (empty key = list all)"},
+    {"name": "forget", "args": "key", "desc": "Forget a remembered fact"},
+    {"name": "clipboard", "args": "action,text", "desc": "Clipboard get/set (action: get|set)"},
+    {"name": "hotkey", "args": "keys", "desc": "Press a key combo like 'ctrl+s', 'alt+tab', 'win+d'"},
+    {"name": "window", "args": "action", "desc": "Window: minimize, maximize, close, switch, snap_left, snap_right, show_desktop"},
+    {"name": "write_in", "args": "text,enter", "desc": "Type text into the focused field; enter=true to submit"},
 ]

@@ -27,6 +27,21 @@ pyttsx3>=2.90
 # Windows-only native voices (optional, good Hindi voice):
 pywin32>=306 ; sys_platform == "win32"
 
+# --- Offline speech-to-text (optional, no internet) ---
+# Download a model from https://alphacephei.com/vosk/models and set
+# voice.vosk_model in config.json to its folder.
+vosk>=0.3.45
+
+# --- Vision: screen capture + OCR (read what's on screen) ---
+mss>=9.0.1
+pytesseract>=0.3.10
+# pytesseract also needs the Tesseract ENGINE installed separately:
+#   Windows: https://github.com/UB-Mannheim/tesseract/wiki
+#   then set vision.tesseract_cmd in config.json
+
+# --- Clipboard access ---
+pyperclip>=1.8.2
+
 # NOTE: the "brain" needs NO python package.
 #   * Local + free : install Ollama from https://ollama.com (separate app)
 #   * Cloud        : just put an API key in config.json (uses urllib directly)

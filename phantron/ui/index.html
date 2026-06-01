@@ -97,6 +97,7 @@
     <div class="hstat">
       <span class="pill"><span class="dot" id="brainDot"></span>BRAIN <b id="brainName">…</b></span>
       <span class="pill">VOICE <b id="voiceName">…</b></span>
+      <span class="pill">VISION <b id="visionName">…</b></span>
       <span class="pill" id="modePill">MODE <b id="modeName">…</b></span>
     </div>
   </header>
@@ -163,7 +164,8 @@ async function loadStatus(){
     const s=await (await fetch("/api/status")).json();
     $("#sub").textContent = s.user_name+" · v"+s.version;
     $("#brainName").textContent = s.brain.provider+" ("+s.brain.model+")";
-    $("#voiceName").textContent = s.voice.tts!=="none" ? "ready" : "text";
+    $("#voiceName").textContent = s.voice.tts!=="none" ? (s.voice.stt!=="none"?"full":"speak") : "text";
+    $("#visionName").textContent = s.vision ? (s.vision.ocr?"see+read":(s.vision.capture?"see":"off")) : "off";
     $("#modeName").textContent = s.autonomous ? "AUTONOMOUS" : "CHAT";
     const off = s.brain.provider==="offline";
     $("#brainDot").className = "dot"+(off?" off":"");

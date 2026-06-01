@@ -128,6 +128,61 @@ class Brain:
         """One-shot helper for a single user message."""
         return self.chat(system, [{"role": "user", "content": user}])
 
+    # ─────────────────────────────────────────────────────────────────────
+    #  Vision (send an image + question to a vision-capable model)
+    # ─────────────────────────────────────────────────────────────────────
+    def see(self, question: str, image_b64: str) -> str:
+        """
+        Ask a vision-capable model about a base64 PNG. Works with
+        OpenAI-compatible (image_url data URI), Ollama (images list) and
+        Anthropic (image source). Returns text, or an ERR string on failure.
+        """
+        prov = self.provider()
+        try:
+            if prov == "openai":
+                base = self.cfg.get("brain.openai.base_url", "https://api.openai.com/v1").rstrip("/")
+                key = self.cfg.get("brain.openai.api_key", "")
+                payload = {
+                    "model": self.cfg.get("brain.vision_model") or self.cfg.get("brain.openai.model"),
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image_url",
+                         "image_url": {"url": "data:image/png;base64," + image_b64}},
+                    ]}],
+                    "max_tokens": self._max_tokens(),
+                }
+                out = _http_json(base + "/chat/completions", payload,
+                                 {"Authorization": "Bearer " + key}, timeout=120)
+                ch = out.get("choices") or []
+                return (ch[0]["message"]["content"].strip() if ch else "")
+            if prov == "ollama":
+                url = self.cfg.get("brain.ollama.url", "http://localhost:11434").rstrip("/")
+                payload = {
+                    "model": self.cfg.get("brain.vision_model") or self.cfg.get("brain.ollama.model"),
+                    "messages": [{"role": "user", "content": question, "images": [image_b64]}],
+                    "stream": False,
+                }
+                out = _http_json(url + "/api/chat", payload, {}, timeout=120)
+                return (out.get("message", {}).get("content") or "").strip()
+            if prov == "anthropic":
+                key = self.cfg.get("brain.anthropic.api_key", "")
+                payload = {
+                    "model": self.cfg.get("brain.vision_model") or self.cfg.get("brain.anthropic.model"),
+                    "max_tokens": self._max_tokens(),
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image", "source": {"type": "base64",
+                         "media_type": "image/png", "data": image_b64}},
+                    ]}],
+                }
+                out = _http_json("https://api.anthropic.com/v1/messages", payload,
+                                 {"x-api-key": key, "anthropic-version": "2023-06-01"}, timeout=120)
+                parts = out.get("content") or []
+                return "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+            return ERR + " no vision provider"
+        except Exception as exc:
+            return "%s vision %s: %s" % (ERR, prov, str(exc)[:160])
+
     # ---- provider implementations ----
     def _temp(self) -> float:
         return float(self.cfg.get("brain.temperature", 0.6))

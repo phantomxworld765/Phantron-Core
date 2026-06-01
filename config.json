@@ -7,6 +7,7 @@
     "temperature": 0.6,
     "max_tokens": 1024,
     "memory_turns": 12,
+    "vision_model": "",
     "ollama": {
       "url": "http://localhost:11434",
       "model": "llama3.1"
@@ -31,7 +32,14 @@
     "output": true,
     "wake_word": "phantron",
     "stt_language": "en-IN",
-    "tts_voice": ""
+    "tts_voice": "",
+    "engine": "auto",
+    "rate": 178,
+    "volume": 1.0,
+    "vosk_model": ""
+  },
+  "vision": {
+    "tesseract_cmd": ""
   },
   "agent": {
     "autonomous": true,
