@@ -108,16 +108,20 @@ def _psutil():
 
 class Skills:
     def __init__(self, cfg, on_event: Optional[Callable[[str, str, str], None]] = None,
-                 vision=None, memory=None):
+                 vision=None, memory=None,
+                 notify: Optional[Callable[[str], None]] = None):
         self.cfg = cfg
         self.on_event = on_event
         self.vision = vision
         self.memory = memory
+        # notify(text): used by reminders/timers to speak + surface to the UI
+        self.notify = notify
         self.guard = SafetyGuard(
             enabled=bool(cfg.get("agent.safe_mode", True)),
             allow_shutdown=bool(cfg.get("agent.allow_shutdown", False)),
         )
         self.name = cfg.get("user_name", "P7")
+        self._timers: list = []   # keep references so they aren't GC'd
 
     def _log(self, action: str, detail: str = "", kind: str = "tool"):
         if self.on_event:
@@ -484,6 +488,239 @@ class Skills:
         return res
 
     # ─────────────────────────────────────────────────────────────────────
+    #  Reminders & timers (background threads)
+    # ─────────────────────────────────────────────────────────────────────
+    def _fire(self, message: str):
+        msg = "Reminder, %s: %s" % (self.name, message)
+        self._log("Reminder", message, "speak")
+        if self.notify:
+            try:
+                self.notify(msg)
+            except Exception:
+                pass
+
+    def set_reminder(self, text: str = "", minutes: Any = 0, seconds: Any = 0) -> str:
+        """Remind P7 after a delay. e.g. set_reminder('chai', minutes=10)."""
+        try:
+            delay = int(float(minutes or 0)) * 60 + int(float(seconds or 0))
+        except Exception:
+            delay = 0
+        if delay <= 0:
+            return "Kitni der baad yaad dilaun? (minutes/seconds do)"
+        import threading
+        t = threading.Timer(delay, self._fire, args=(text or "reminder",))
+        t.daemon = True
+        t.start()
+        self._timers.append(t)
+        when = "%d min" % (delay // 60) if delay >= 60 else "%d sec" % delay
+        self._log("Reminder set", "%s in %s" % (text, when))
+        return "Theek hai %s, %s baad yaad dila dunga: %s" % (self.name, when, text)
+
+    def timer(self, seconds: Any = 0, minutes: Any = 0) -> str:
+        """A simple countdown timer that announces when done."""
+        return self.set_reminder("Timer pura hua!", minutes=minutes, seconds=seconds)
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Notes & to-do (persisted as plain text files)
+    # ─────────────────────────────────────────────────────────────────────
+    def _notes_file(self, name: str = "notes") -> Path:
+        return self.cfg.files_dir() / ("%s.txt" % re.sub(r"[^\w.-]", "_", name or "notes"))
+
+    def add_note(self, text: str = "", name: str = "notes") -> str:
+        if not text:
+            return "Kya note karun?"
+        from datetime import datetime
+        line = "[%s] %s\n" % (datetime.now().strftime("%Y-%m-%d %H:%M"), text)
+        try:
+            p = self._notes_file(name)
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(line)
+            self._log("Note added", text[:40], "done")
+            return "Note save kar liya, %s." % self.name
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def read_notes(self, name: str = "notes") -> str:
+        try:
+            p = self._notes_file(name)
+            if not p.exists():
+                return "Abhi koi note nahi hai."
+            return p.read_text(encoding="utf-8", errors="replace")[:2000] or "(empty)"
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def add_todo(self, text: str = "") -> str:
+        return self.add_note("[ ] " + text, name="todo") if text else "Kya add karun?"
+
+    def list_todo(self, _: str = "") -> str:
+        return self.read_notes("todo")
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Weather & news (free, no API key)
+    # ─────────────────────────────────────────────────────────────────────
+    def weather(self, city: str = "") -> str:
+        c = (city or "").strip()
+        try:
+            url = "https://wttr.in/%s?format=%%l:+%%c+%%t+(feels+%%f),+%%h+humidity,+wind+%%w" % urllib.parse.quote(c)
+            req = urllib.request.Request(url, headers={"User-Agent": "curl/8"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                out = resp.read().decode("utf-8", "replace").strip()
+            self._log("Weather", c or "auto")
+            return out[:300] if out else "Weather nahi mila."
+        except Exception:
+            return "Weather laane me dikkat - internet check kar lo."
+
+    def news(self, topic: str = "") -> str:
+        """Top headlines via Google News RSS (no key)."""
+        try:
+            if topic:
+                url = "https://news.google.com/rss/search?q=%s&hl=en-IN&gl=IN&ceid=IN:en" % urllib.parse.quote(topic)
+            else:
+                url = "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
+            req = urllib.request.Request(url, headers={"User-Agent": "PHANTRON/2"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                xml = resp.read().decode("utf-8", "replace")
+            titles = re.findall(r"<title>(.*?)</title>", xml)
+            titles = [re.sub(r"<!\[CDATA\[|\]\]>", "", t).strip() for t in titles[1:6]]
+            self._log("News", topic or "top")
+            if titles:
+                return "Top khabrein:\n- " + "\n- ".join(titles)
+            return "Koi news nahi mili."
+        except Exception:
+            return "News laane me dikkat - internet check kar lo."
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Calculator (safe arithmetic eval)
+    # ─────────────────────────────────────────────────────────────────────
+    def calc(self, expression: str = "") -> str:
+        expr = (expression or "").strip()
+        if not expr:
+            return "Kya calculate karun?"
+        if not re.fullmatch(r"[\d\s+\-*/().%^]+", expr):
+            return "Sirf numbers aur + - * / ( ) % ^ allowed hain."
+        try:
+            safe = expr.replace("^", "**")
+            result = eval(safe, {"__builtins__": {}}, {})  # noqa: S307 - input is whitelisted above
+            return "%s = %s" % (expr, result)
+        except Exception:
+            return "Ye calculate nahi kar paya."
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Process & system control
+    # ─────────────────────────────────────────────────────────────────────
+    def close_app(self, name: str = "") -> str:
+        n = (name or "").strip()
+        if not n:
+            return "Kis app ko band karun?"
+        exe = APPS.get(n.lower(), n)
+        if not exe.lower().endswith(".exe"):
+            exe += ".exe"
+        try:
+            if IS_WINDOWS:
+                subprocess.run(["taskkill", "/IM", exe, "/F"], capture_output=True, timeout=15)
+            else:
+                subprocess.run(["pkill", "-f", n], capture_output=True, timeout=15)
+            self._log("Closed", n, "done")
+            return "%s band kar diya." % n
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def list_processes(self, _: str = "") -> str:
+        ps = _psutil()
+        if not ps:
+            return "Process list ke liye psutil chahiye."
+        try:
+            procs = []
+            for p in ps.process_iter(["name", "memory_percent"]):
+                try:
+                    procs.append((p.info["name"], p.info["memory_percent"] or 0))
+                except Exception:
+                    continue
+            procs.sort(key=lambda x: x[1], reverse=True)
+            top = ["%s (%.1f%%)" % (n, m) for n, m in procs[:8] if n]
+            return "Top processes (RAM):\n- " + "\n- ".join(top)
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def lock_pc(self, _: str = "") -> str:
+        try:
+            if IS_WINDOWS:
+                subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], timeout=10)
+                return "PC lock kar diya."
+            return "Lock sirf Windows pe supported hai abhi."
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def power(self, action: str = "", minutes: Any = 0) -> str:
+        """shutdown / restart / sleep / cancel - gated by agent.allow_shutdown."""
+        act = (action or "").lower()
+        if not self.cfg.get("agent.allow_shutdown", False):
+            return "Power control band hai. config me agent.allow_shutdown=true karo."
+        try:
+            mins = int(float(minutes or 0))
+            if not IS_WINDOWS:
+                return "Power control abhi sirf Windows pe."
+            if act in ("shutdown", "off"):
+                subprocess.run(["shutdown", "/s", "/t", str(mins * 60)], timeout=10)
+                return "Shutdown %s min me." % mins
+            if act in ("restart", "reboot"):
+                subprocess.run(["shutdown", "/r", "/t", str(mins * 60)], timeout=10)
+                return "Restart %s min me." % mins
+            if act in ("sleep",):
+                subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], timeout=10)
+                return "Sleep mode."
+            if act in ("cancel", "abort"):
+                subprocess.run(["shutdown", "/a"], timeout=10)
+                return "Shutdown cancel kar diya."
+            return "Unknown power action."
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    def volume(self, level: Any = None) -> str:
+        """Set absolute volume 0-100 (needs pyautogui for fallback steps)."""
+        pag = _pyautogui()
+        if level is None:
+            return "Kितना volume? (0-100)"
+        try:
+            lvl = max(0, min(100, int(float(level))))
+        except Exception:
+            return "Volume 0-100 me do."
+        if pag:
+            # rough: mute then step up to ~level in 2% increments
+            try:
+                for _ in range(50):
+                    pag.press("volumedown")
+                for _ in range(lvl // 2):
+                    pag.press("volumeup")
+                return "Volume ~%d%% set kiya." % lvl
+            except Exception:
+                pass
+        return "Volume set karne ke liye pyautogui chahiye."
+
+    def open_folder(self, name: str = "") -> str:
+        """Open common Windows folders by name (downloads, documents, etc.)."""
+        n = (name or "").lower().strip()
+        known = {
+            "downloads": Path.home() / "Downloads",
+            "documents": Path.home() / "Documents",
+            "desktop": Path.home() / "Desktop",
+            "pictures": Path.home() / "Pictures",
+            "music": Path.home() / "Music",
+            "videos": Path.home() / "Videos",
+            "home": Path.home(),
+            "phantron": self.cfg.files_dir(),
+        }
+        target = known.get(n, n)
+        try:
+            if IS_WINDOWS:
+                os.startfile(str(target))  # type: ignore[attr-defined]
+            else:
+                subprocess.Popen(["xdg-open", str(target)])
+            return "%s folder khol diya." % n
+        except Exception as exc:
+            return "Error: " + str(exc)
+
+    # ─────────────────────────────────────────────────────────────────────
     #  Dispatch
     # ─────────────────────────────────────────────────────────────────────
     def execute(self, tool: str, args: Dict[str, Any]) -> str:
@@ -495,7 +732,8 @@ class Skills:
         except TypeError:
             # tolerate a single positional-style arg under common keys
             for key in ("target", "query", "text", "command", "action", "path",
-                        "question", "keys", "value", "key"):
+                        "question", "keys", "value", "key", "city", "topic",
+                        "expression", "name", "level"):
                 if key in (args or {}):
                     return fn(args[key])
             return fn()
@@ -529,4 +767,19 @@ TOOLS: List[Dict[str, str]] = [
     {"name": "hotkey", "args": "keys", "desc": "Press a key combo like 'ctrl+s', 'alt+tab', 'win+d'"},
     {"name": "window", "args": "action", "desc": "Window: minimize, maximize, close, switch, snap_left, snap_right, show_desktop"},
     {"name": "write_in", "args": "text,enter", "desc": "Type text into the focused field; enter=true to submit"},
+    {"name": "set_reminder", "args": "text,minutes,seconds", "desc": "Remind the user after a delay"},
+    {"name": "timer", "args": "minutes,seconds", "desc": "Start a countdown timer that announces when done"},
+    {"name": "add_note", "args": "text", "desc": "Save a quick note"},
+    {"name": "read_notes", "args": "", "desc": "Read saved notes"},
+    {"name": "add_todo", "args": "text", "desc": "Add a to-do item"},
+    {"name": "list_todo", "args": "", "desc": "List to-do items"},
+    {"name": "weather", "args": "city", "desc": "Current weather (city optional = auto-locate)"},
+    {"name": "news", "args": "topic", "desc": "Top news headlines (topic optional)"},
+    {"name": "calc", "args": "expression", "desc": "Calculate an arithmetic expression"},
+    {"name": "close_app", "args": "name", "desc": "Close/kill a running app by name"},
+    {"name": "list_processes", "args": "", "desc": "List the top processes by memory"},
+    {"name": "lock_pc", "args": "", "desc": "Lock the workstation"},
+    {"name": "power", "args": "action,minutes", "desc": "shutdown/restart/sleep/cancel (gated by config)"},
+    {"name": "volume", "args": "level", "desc": "Set system volume 0-100"},
+    {"name": "open_folder", "args": "name", "desc": "Open a folder: downloads, documents, desktop, pictures, music, videos, home"},
 ]

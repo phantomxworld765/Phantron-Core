@@ -117,10 +117,22 @@ If `pyaudio` won't install on Windows:
 `open_app`, `play_song`, `web_search`, `system_info`, `media`, `screenshot`,
 `mouse`, `type_text`, `press_key`, `create_file`, `read_file`, `list_dir`,
 `run_command`, `tell_time`, `see_screen`, `read_screen`, `click_text`,
-`remember`, `recall`, `forget`, `clipboard`, `hotkey`, `window`, `write_in`.
+`remember`, `recall`, `forget`, `clipboard`, `hotkey`, `window`, `write_in`,
+`set_reminder`, `timer`, `add_note`, `read_notes`, `add_todo`, `list_todo`,
+`weather`, `news`, `calc`, `close_app`, `list_processes`, `lock_pc`, `power`,
+`volume`, `open_folder`.
 
 In **autonomous** mode the brain decides which tools to call and can chain a
 few of them to finish a request, then replies to you.
+
+### Productivity (work even offline, no API key)
+- **Reminders & timers** — "remind me to drink water in 10 min", "set timer for
+  5 minutes". PHANTRON speaks + shows it when the time is up.
+- **Notes & to-do** — "note down buy milk", "add todo finish report",
+  "read notes", "list todo". Saved to `~/Phantron/Files`.
+- **Calculator** — "calculate 25*4+10" or just "12+8*2".
+- **Weather & news** — "weather in Delhi", "news about technology" (free, no key).
+- **System** — "lock pc", "running processes", "close chrome", "open downloads".
 
 ### Vision (PHANTRON can SEE the screen)
 - `read_screen` — OCR the whole screen to text.

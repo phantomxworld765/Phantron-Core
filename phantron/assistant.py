@@ -33,13 +33,20 @@ class Assistant:
         self.memory = Memory(self.cfg)
         self.vision = Vision(self.cfg, brain=self.brain, on_event=self._event)
         self.skills = Skills(self.cfg, on_event=self._event,
-                             vision=self.vision, memory=self.memory)
+                             vision=self.vision, memory=self.memory,
+                             notify=self._notify)
         self.agent = Agent(self.cfg, self.brain, self.skills,
                            on_event=self._event, memory=self.memory)
         self.voice = Voice(self.cfg, on_event=self._event)
 
         self._voice_thread: Optional[threading.Thread] = None
         self._voice_stop = threading.Event()
+
+    def _notify(self, text: str):
+        """Called by reminders/timers: surface to the UI and speak it aloud."""
+        self._event("PHANTRON", text, "reply")
+        if self.voice.can_speak:
+            threading.Thread(target=self.voice.speak, args=(text,), daemon=True).start()
 
     # ─────────────────────────────────────────────────────────────────────
     #  Event plumbing (for the UI)

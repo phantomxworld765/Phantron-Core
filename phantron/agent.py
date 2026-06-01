@@ -285,4 +285,63 @@ class Agent:
         if t in ("hi", "hello", "hey", "hii", "namaste", "yo"):
             return "Hello %s! Main PHANTRON. Bolo kya karna hai?" % self.cfg.get("user_name", "P7")
 
+        # weather
+        m = re.search(r"\b(?:weather|mausam|temperature)\s*(?:in|of|ka)?\s*(.*)", t)
+        if m and ("weather" in t or "mausam" in t or "temperature" in t):
+            return self.skills.weather(m.group(1).strip(" ?.!"))
+
+        # news
+        m = re.search(r"\b(?:news|khabar|headlines)\s*(?:about|on|ki)?\s*(.*)", t)
+        if m and ("news" in t or "khabar" in t or "headline" in t):
+            return self.skills.news(m.group(1).strip(" ?.!"))
+
+        # calculator
+        m = re.search(r"\b(?:calculate|calc|kitna(?:\s+hota)?(?:\s+hai)?|solve)\s+(.+)", t)
+        if m:
+            return self.skills.calc(m.group(1).strip(" ?.!"))
+        if re.fullmatch(r"[\d\s+\-*/().%^]+", text.strip()) and re.search(r"[+\-*/]", text):
+            return self.skills.calc(text.strip())
+
+        # reminders / timers
+        m = re.search(r"\bremind me (?:to |about )?(.+?)\s+(?:in|after)\s+(\d+)\s*(min|minute|minutes|sec|second|seconds|hour|hours|ghante|minat)?", t)
+        if m:
+            num = int(m.group(2)); unit = (m.group(3) or "min")
+            if unit.startswith(("sec", "second")):
+                return self.skills.set_reminder(m.group(1).strip(), seconds=num)
+            if unit.startswith(("hour", "ghant")):
+                return self.skills.set_reminder(m.group(1).strip(), minutes=num * 60)
+            return self.skills.set_reminder(m.group(1).strip(), minutes=num)
+        m = re.search(r"\b(?:set (?:a )?timer|timer)\s+(?:for\s+)?(\d+)\s*(min|minute|minutes|sec|second|seconds)?", t)
+        if m:
+            num = int(m.group(1)); unit = (m.group(2) or "min")
+            if unit.startswith(("sec", "second")):
+                return self.skills.timer(seconds=num)
+            return self.skills.timer(minutes=num)
+
+        # notes & todo
+        m = re.search(r"\b(?:note|note down|likho|yaad rakhna)\s+(?:that\s+)?(.+)", t)
+        if m and "todo" not in t and "to-do" not in t:
+            return self.skills.add_note(m.group(1).strip())
+        if re.search(r"\b(?:read|show|meri?)\s+notes\b", t):
+            return self.skills.read_notes()
+        m = re.search(r"\b(?:add (?:to )?todo|todo|to-do)\s+(.+)", t)
+        if m:
+            return self.skills.add_todo(m.group(1).strip())
+        if re.search(r"\b(?:list|show|meri?)\s+(?:todo|to-do|tasks)\b", t):
+            return self.skills.list_todo()
+
+        # system control
+        if re.search(r"\block (?:pc|computer|screen)\b|computer lock", t):
+            return self.skills.lock_pc()
+        if re.search(r"\b(?:processes|kon se app chal)\b|running apps", t):
+            return self.skills.list_processes()
+        m = re.search(r"\bclose\s+(.+)", t)
+        if m and "window" not in t:
+            return self.skills.close_app(m.group(1).strip(" .!"))
+
+        # folders
+        m = re.search(r"\bopen\s+(downloads|documents|desktop|pictures|music|videos|home)\s*(?:folder)?", t)
+        if m:
+            return self.skills.open_folder(m.group(1))
+
         return None
