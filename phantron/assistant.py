@@ -17,6 +17,9 @@ from .agent import Agent
 from .brain import Brain
 from .config import Config, load_config
 from .memory import Memory
+from .messaging import Messaging
+from .security import Security
+from .selfheal import SelfHeal
 from .skills import Skills
 from .vision import Vision
 from .voice import Voice
@@ -32,15 +35,39 @@ class Assistant:
         self.brain = Brain(self.cfg)
         self.memory = Memory(self.cfg)
         self.vision = Vision(self.cfg, brain=self.brain, on_event=self._event)
+        self.security = Security(self.cfg, on_event=self._event)
+        self.messaging = Messaging(self.cfg, on_event=self._event)
+        self.selfheal = SelfHeal(self.cfg, brain=self.brain, on_event=self._event)
         self.skills = Skills(self.cfg, on_event=self._event,
                              vision=self.vision, memory=self.memory,
-                             notify=self._notify)
+                             notify=self._notify,
+                             security=self.security, messaging=self.messaging,
+                             selfheal=self.selfheal)
         self.agent = Agent(self.cfg, self.brain, self.skills,
                            on_event=self._event, memory=self.memory)
         self.voice = Voice(self.cfg, on_event=self._event)
 
         self._voice_thread: Optional[threading.Thread] = None
         self._voice_stop = threading.Event()
+
+        # Re-arm reminders saved from previous sessions.
+        try:
+            restored = self.skills.reschedule_pending()
+            if restored:
+                self._event("Reminders", "%d pending restored" % restored, "info")
+        except Exception:
+            pass
+
+        # Optional: a quick security audit at launch.
+        if self.cfg.get("security.auto_audit_on_start", False):
+            threading.Thread(target=self._startup_audit, daemon=True).start()
+
+    def _startup_audit(self):
+        try:
+            report = self.security.audit()
+            self._event("Security", report.splitlines()[0], "security")
+        except Exception:
+            pass
 
     def _notify(self, text: str):
         """Called by reminders/timers: surface to the UI and speak it aloud."""
@@ -72,7 +99,12 @@ class Assistant:
     # ─────────────────────────────────────────────────────────────────────
     def chat(self, text: str, speak: bool = False) -> str:
         self.memory.add_journal("P7", text)
-        reply = self.agent.handle(text)
+        # run the agent inside the self-heal crash-net when enabled, so one
+        # broken skill never takes the whole assistant down.
+        if self.cfg.get("agent.self_heal", True):
+            reply = self.selfheal.guard("chat", self.agent.handle, text)
+        else:
+            reply = self.agent.handle(text)
         self.memory.add_journal("PHANTRON", reply)
         if speak and self.voice.can_speak and reply:
             threading.Thread(target=self.voice.speak, args=(reply,), daemon=True).start()
@@ -90,6 +122,9 @@ class Assistant:
                 "capture": self.vision.can_capture,
                 "ocr": self.vision.can_ocr,
             },
+            "security": self.security.status(),
+            "messaging": self.messaging.status(),
+            "selfheal": self.selfheal.status(),
             "memory_facts": len(self.memory.facts),
             "autonomous": bool(self.cfg.get("agent.autonomous", True)),
         }

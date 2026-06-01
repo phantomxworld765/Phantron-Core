@@ -42,6 +42,12 @@ pytesseract>=0.3.10
 # --- Clipboard access ---
 pyperclip>=1.8.2
 
-# NOTE: the "brain" needs NO python package.
+# --- WhatsApp instant send (optional; else WhatsApp Web opens pre-filled) ---
+pywhatkit>=5.4
+
+# NOTE: messaging/email need NO extra package - Telegram uses urllib and email
+# uses Python's built-in smtplib/imaplib. Just fill config.json.
+#
+# The "brain" needs NO python package.
 #   * Local + free : install Ollama from https://ollama.com (separate app)
 #   * Cloud        : just put an API key in config.json (uses urllib directly)

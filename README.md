@@ -127,12 +127,44 @@ few of them to finish a request, then replies to you.
 
 ### Productivity (work even offline, no API key)
 - **Reminders & timers** — "remind me to drink water in 10 min", "set timer for
-  5 minutes". PHANTRON speaks + shows it when the time is up.
+  5 minutes". PHANTRON speaks + shows it when the time is up. Reminders are
+  **saved to disk** and re-armed automatically after a restart.
 - **Notes & to-do** — "note down buy milk", "add todo finish report",
   "read notes", "list todo". Saved to `~/Phantron/Files`.
 - **Calculator** — "calculate 25*4+10" or just "12+8*2".
 - **Weather & news** — "weather in Delhi", "news about technology" (free, no key).
 - **System** — "lock pc", "running processes", "close chrome", "open downloads".
+- **Export** — "export chat" saves the whole conversation to a file.
+
+### Security & defensive system (your PC's shield)
+Defensive only — PHANTRON never attacks or scans anyone else, just protects
+P7's own machine.
+- **"security audit"** — a health report with a score out of 100 (Defender,
+  firewall, Windows Update, open ports, suspicious processes).
+- **"scan my pc"** / **"full scan"** — triggers Microsoft Defender.
+- **"defender status"**, **"firewall status / on / off"**.
+- **"open ports"**, **"active connections"** — see what's exposed/talking out.
+- **"scan suspicious"** — heuristic check for hidden/encoded commands and
+  executables running from risky folders (Temp, etc.).
+- **"quarantine \<file\>"** — move a flagged file into a locked quarantine folder
+  (reversible).
+- **"harden"** — a safety checklist.
+
+### Messaging & email
+- **WhatsApp** — "whatsapp +9198... saying I'll be late" (instant with
+  `pywhatkit`, else opens WhatsApp Web pre-filled).
+- **Telegram** — set a bot token + chat_id in `config.json` under
+  `messaging.telegram`, then "telegram remind the team".
+- **Email** — set `messaging.email` (use a Gmail **App Password**). Then
+  "read my email" or send via the `send_email` tool.
+
+### Self-healing (resilience)
+- Every command runs inside a crash-net: one broken skill never takes the
+  whole assistant down. Errors are logged to `~/Phantron/selfheal.log`.
+- **"explain the last error"** — plain-language explanation (uses the brain).
+- **"fix file path/to/x.py"** — PHANTRON reads the file, asks the brain for a
+  correction, **verifies it compiles**, backs up the original to `.bak`, then
+  writes the fix. If the fix doesn't compile, nothing is changed.
 
 ### Vision (PHANTRON can SEE the screen)
 - `read_screen` — OCR the whole screen to text.
@@ -160,14 +192,17 @@ continuity between runs. Recall with "what's my gpu" or the `recall` tool.
 
 ```
 phantron/
-  __main__.py    entry point (web UI / --cli / --voice)
+  __main__.py    entry point (web UI / --cli / --voice / --voices / --status)
   config.py      config.json loading + sane defaults
   brain.py       multi-provider LLM client + vision (stdlib only)
   skills.py      the concrete actions + safety guard
   agent.py       decision loop (think -> act -> speak), memory-aware
-  memory.py      persistent facts + conversation journal
+  memory.py      persistent facts + journal + reminders + export
   vision.py      screen capture, OCR, find/click text, describe
   voice.py       advanced speech in/out (Vosk offline STT + smart TTS)
+  security.py    defensive shield: audit, AV, firewall, ports, heuristics
+  messaging.py   WhatsApp / Telegram / email send + read
+  selfheal.py    crash-net + auto-fix Python files (verified, reversible)
   assistant.py   orchestrator wiring it all together
   server.py      stdlib web server + JSON API
   ui/index.html  the cyberpunk interface

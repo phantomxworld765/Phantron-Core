@@ -236,8 +236,10 @@ class Agent:
         """A fast intent parser for the most common direct commands."""
         t = text.lower().strip()
 
+        # "open ..." but NOT the special cases handled later (ports, connections,
+        # email inbox, known folders) - those are matched further down.
         m = re.search(r"\b(open|khol(?:o|do)?|launch|start)\s+(.+)", t)
-        if m:
+        if m and not re.search(r"\b(ports?|connections?|inbox|downloads|documents|desktop|pictures|music|videos|home)\b", m.group(2)):
             return self.skills.open_app(m.group(2).strip(" .!"))
 
         m = re.search(r"\b(play|chala(?:o|do)?|bajao)\s+(.+)", t)
@@ -343,5 +345,52 @@ class Agent:
         m = re.search(r"\bopen\s+(downloads|documents|desktop|pictures|music|videos|home)\s*(?:folder)?", t)
         if m:
             return self.skills.open_folder(m.group(1))
+
+        # security / defensive
+        if re.search(r"\bsecurity (?:audit|check|scan)\b|am i (?:safe|secure)|pc safe", t):
+            return self.skills.security_audit()
+        if re.search(r"\b(?:antivirus|virus) scan|defender scan|scan (?:my )?(?:pc|computer|system)", t):
+            mode = "full" if "full" in t or "deep" in t else "quick"
+            return self.skills.antivirus_scan(mode)
+        if re.search(r"\bdefender status|antivirus status|real.?time protection", t):
+            return self.skills.defender_status()
+        if re.search(r"\bfirewall\b", t):
+            if re.search(r"\b(on|enable|chalu)\b", t):
+                return self.skills.firewall("on")
+            if re.search(r"\b(off|disable|band)\b", t):
+                return self.skills.firewall("off")
+            return self.skills.firewall("status")
+        if re.search(r"\b(open|listening) ports?\b|kon se port", t):
+            return self.skills.open_ports()
+        if re.search(r"\b(?:active )?connections?\b|network connection", t):
+            return self.skills.network_connections()
+        if re.search(r"\bsuspicious\b|koi virus|malware|threat check", t):
+            return self.skills.scan_suspicious()
+        if re.search(r"\b(?:harden|hardening|secure my pc|security tips)\b", t):
+            return self.skills.harden_tips()
+
+        # self-healing
+        m = re.search(r"\b(?:heal|fix|repair)\s+(?:code\s+)?(?:file\s+)?([\w./\\-]+\.py)", t)
+        if m:
+            return self.skills.heal_code(m.group(1).strip())
+        if re.search(r"\bexplain (?:the )?(?:last )?error\b|kya error tha", t):
+            return self.skills.explain_error()
+
+        # reminders list + export
+        if re.search(r"\b(?:list|show|pending|mere)\s+reminders?\b", t):
+            return self.skills.list_reminders()
+        if re.search(r"\bexport (?:chat|conversation|baat)\b|save (?:chat|conversation)", t):
+            fmt = "json" if "json" in t else "txt"
+            return self.skills.export_chat(fmt)
+
+        # messaging (simple offline patterns)
+        m = re.search(r"\b(?:whatsapp|wa)\s+(\+?\d[\d\s-]{6,})\s+(?:saying|that|:)?\s*(.+)", t)
+        if m:
+            return self.skills.send_whatsapp(m.group(1).strip(), m.group(2).strip())
+        m = re.search(r"\btelegram\s+(?:saying|that|:)?\s*(.+)", t)
+        if m:
+            return self.skills.send_telegram(m.group(1).strip())
+        if re.search(r"\b(?:read|check)\s+(?:my )?(?:email|mail|inbox)\b", t):
+            return self.skills.read_email(5)
 
         return None

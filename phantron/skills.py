@@ -109,11 +109,15 @@ def _psutil():
 class Skills:
     def __init__(self, cfg, on_event: Optional[Callable[[str, str, str], None]] = None,
                  vision=None, memory=None,
-                 notify: Optional[Callable[[str], None]] = None):
+                 notify: Optional[Callable[[str], None]] = None,
+                 security=None, messaging=None, selfheal=None):
         self.cfg = cfg
         self.on_event = on_event
         self.vision = vision
         self.memory = memory
+        self.security = security
+        self.messaging = messaging
+        self.selfheal = selfheal
         # notify(text): used by reminders/timers to speak + surface to the UI
         self.notify = notify
         self.guard = SafetyGuard(
@@ -488,16 +492,42 @@ class Skills:
         return res
 
     # ─────────────────────────────────────────────────────────────────────
-    #  Reminders & timers (background threads)
+    #  Reminders & timers (background threads, persisted via memory)
     # ─────────────────────────────────────────────────────────────────────
-    def _fire(self, message: str):
+    def _fire(self, message: str, reminder_id: Any = None):
         msg = "Reminder, %s: %s" % (self.name, message)
         self._log("Reminder", message, "speak")
+        if reminder_id is not None and self.memory:
+            try:
+                self.memory.mark_reminder_done(int(reminder_id))
+            except Exception:
+                pass
         if self.notify:
             try:
                 self.notify(msg)
             except Exception:
                 pass
+
+    def _schedule_at(self, message: str, fire_at: float, reminder_id: Any = None):
+        """Schedule a reminder for an absolute epoch time (used on restart too)."""
+        import threading
+        delay = max(0.0, float(fire_at) - time.time())
+        t = threading.Timer(delay, self._fire, args=(message, reminder_id))
+        t.daemon = True
+        t.start()
+        self._timers.append(t)
+
+    def reschedule_pending(self) -> int:
+        """Re-arm reminders saved from previous sessions. Returns how many."""
+        if not self.memory:
+            return 0
+        count = 0
+        for r in self.memory.pending_reminders():
+            self._schedule_at(r.get("text", "reminder"), r.get("fire_at", time.time()), r.get("id"))
+            count += 1
+        if count:
+            self._log("Reminders restored", "%d pending" % count)
+        return count
 
     def set_reminder(self, text: str = "", minutes: Any = 0, seconds: Any = 0) -> str:
         """Remind P7 after a delay. e.g. set_reminder('chai', minutes=10)."""
@@ -507,11 +537,14 @@ class Skills:
             delay = 0
         if delay <= 0:
             return "Kitni der baad yaad dilaun? (minutes/seconds do)"
-        import threading
-        t = threading.Timer(delay, self._fire, args=(text or "reminder",))
-        t.daemon = True
-        t.start()
-        self._timers.append(t)
+        fire_at = time.time() + delay
+        rid = None
+        if self.memory:
+            try:
+                rid = self.memory.add_reminder(text or "reminder", fire_at).get("id")
+            except Exception:
+                rid = None
+        self._schedule_at(text or "reminder", fire_at, rid)
         when = "%d min" % (delay // 60) if delay >= 60 else "%d sec" % delay
         self._log("Reminder set", "%s in %s" % (text, when))
         return "Theek hai %s, %s baad yaad dila dunga: %s" % (self.name, when, text)
@@ -519,6 +552,11 @@ class Skills:
     def timer(self, seconds: Any = 0, minutes: Any = 0) -> str:
         """A simple countdown timer that announces when done."""
         return self.set_reminder("Timer pura hua!", minutes=minutes, seconds=seconds)
+
+    def list_reminders(self, _: str = "") -> str:
+        if not self.memory:
+            return "Reminder memory load nahi hui."
+        return self.memory.list_reminders()
 
     # ─────────────────────────────────────────────────────────────────────
     #  Notes & to-do (persisted as plain text files)
@@ -721,6 +759,77 @@ class Skills:
             return "Error: " + str(exc)
 
     # ─────────────────────────────────────────────────────────────────────
+    #  Security / defensive system (delegates to Security module)
+    # ─────────────────────────────────────────────────────────────────────
+    def security_audit(self, _: str = "") -> str:
+        return self.security.audit() if self.security else "Security module load nahi hua."
+
+    def antivirus_scan(self, mode: str = "quick") -> str:
+        return self.security.antivirus_scan(mode) if self.security else "Security module load nahi hua."
+
+    def defender_status(self, _: str = "") -> str:
+        return self.security.defender_status() if self.security else "Security module load nahi hua."
+
+    def firewall(self, action: str = "status") -> str:
+        return self.security.firewall(action) if self.security else "Security module load nahi hua."
+
+    def open_ports(self, _: str = "") -> str:
+        return self.security.open_ports() if self.security else "Security module load nahi hua."
+
+    def network_connections(self, _: str = "") -> str:
+        return self.security.connections() if self.security else "Security module load nahi hua."
+
+    def scan_suspicious(self, _: str = "") -> str:
+        return self.security.suspicious() if self.security else "Security module load nahi hua."
+
+    def quarantine_file(self, path: str = "") -> str:
+        return self.security.quarantine(path) if self.security else "Security module load nahi hua."
+
+    def harden_tips(self, _: str = "") -> str:
+        return self.security.harden() if self.security else "Security module load nahi hua."
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Messaging & email (delegates to Messaging module)
+    # ─────────────────────────────────────────────────────────────────────
+    def send_whatsapp(self, to: str = "", message: str = "") -> str:
+        return self.messaging.whatsapp(to, message) if self.messaging else "Messaging module load nahi hua."
+
+    def send_telegram(self, message: str = "", chat_id: str = "") -> str:
+        return self.messaging.telegram(message, chat_id) if self.messaging else "Messaging module load nahi hua."
+
+    def send_email(self, to: str = "", subject: str = "", body: str = "") -> str:
+        return self.messaging.send_email(to, subject, body) if self.messaging else "Messaging module load nahi hua."
+
+    def read_email(self, count: Any = 5) -> str:
+        try:
+            n = int(count)
+        except Exception:
+            n = 5
+        return self.messaging.read_email(n) if self.messaging else "Messaging module load nahi hua."
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Self-healing (delegates to SelfHeal module)
+    # ─────────────────────────────────────────────────────────────────────
+    def heal_code(self, path: str = "", error: str = "") -> str:
+        return self.selfheal.heal_file(path, error) if self.selfheal else "Self-heal module load nahi hua."
+
+    def explain_error(self, _: str = "") -> str:
+        return self.selfheal.explain_last() if self.selfheal else "Self-heal module load nahi hua."
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Conversation export (delegates to Memory module)
+    # ─────────────────────────────────────────────────────────────────────
+    def export_chat(self, fmt: str = "txt") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        try:
+            out = self.memory.export_conversation((fmt or "txt").lower())
+            self._log("Exported chat", str(out), "done")
+            return "Conversation export kar di: " + str(out)
+        except Exception as exc:
+            return "Export error: " + str(exc)
+
+    # ─────────────────────────────────────────────────────────────────────
     #  Dispatch
     # ─────────────────────────────────────────────────────────────────────
     def execute(self, tool: str, args: Dict[str, Any]) -> str:
@@ -733,7 +842,8 @@ class Skills:
             # tolerate a single positional-style arg under common keys
             for key in ("target", "query", "text", "command", "action", "path",
                         "question", "keys", "value", "key", "city", "topic",
-                        "expression", "name", "level"):
+                        "expression", "name", "level", "mode", "to", "message",
+                        "subject", "body", "count", "fmt", "error", "chat_id"):
                 if key in (args or {}):
                     return fn(args[key])
             return fn()
@@ -782,4 +892,24 @@ TOOLS: List[Dict[str, str]] = [
     {"name": "power", "args": "action,minutes", "desc": "shutdown/restart/sleep/cancel (gated by config)"},
     {"name": "volume", "args": "level", "desc": "Set system volume 0-100"},
     {"name": "open_folder", "args": "name", "desc": "Open a folder: downloads, documents, desktop, pictures, music, videos, home"},
+    {"name": "list_reminders", "args": "", "desc": "List pending (saved) reminders"},
+    {"name": "export_chat", "args": "fmt", "desc": "Export the conversation to a file (fmt: txt|json)"},
+    # --- Security / defensive ---
+    {"name": "security_audit", "args": "", "desc": "Full security health report with a score"},
+    {"name": "antivirus_scan", "args": "mode", "desc": "Run Microsoft Defender scan (mode: quick|full)"},
+    {"name": "defender_status", "args": "", "desc": "Antivirus real-time protection + definitions status"},
+    {"name": "firewall", "args": "action", "desc": "Firewall: status | on | off"},
+    {"name": "open_ports", "args": "", "desc": "List listening network ports + owning process"},
+    {"name": "network_connections", "args": "", "desc": "List active external network connections"},
+    {"name": "scan_suspicious", "args": "", "desc": "Heuristic scan for suspicious processes/commands"},
+    {"name": "quarantine_file", "args": "path", "desc": "Move a flagged file into locked quarantine"},
+    {"name": "harden_tips", "args": "", "desc": "Security hardening checklist"},
+    # --- Messaging & email ---
+    {"name": "send_whatsapp", "args": "to,message", "desc": "Send a WhatsApp message (to = number with country code)"},
+    {"name": "send_telegram", "args": "message,chat_id", "desc": "Send a Telegram message via bot"},
+    {"name": "send_email", "args": "to,subject,body", "desc": "Send an email"},
+    {"name": "read_email", "args": "count", "desc": "Read the latest emails (headers)"},
+    # --- Self-healing ---
+    {"name": "heal_code", "args": "path,error", "desc": "Auto-fix a Python file (verified, with backup)"},
+    {"name": "explain_error", "args": "", "desc": "Explain the most recent internal error"},
 ]

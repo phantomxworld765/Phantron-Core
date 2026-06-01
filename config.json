@@ -53,7 +53,25 @@
     "max_steps": 6,
     "safe_mode": true,
     "allow_shutdown": false,
-    "command_timeout": 120
+    "command_timeout": 120,
+    "self_heal": true
+  },
+  "security": {
+    "auto_audit_on_start": false,
+    "alert_on_threat": true
+  },
+  "messaging": {
+    "telegram": {
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "email": {
+      "address": "",
+      "app_password": "",
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "imap_host": "imap.gmail.com"
+    }
   },
   "paths": {
     "projects_dir": "",

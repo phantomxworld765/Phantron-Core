@@ -122,6 +122,32 @@ DEFAULTS: Dict[str, Any] = {
         "safe_mode": True,        # block catastrophic shell commands
         "allow_shutdown": False,  # block shutdown/restart unless True
         "command_timeout": 120,   # seconds per shell command
+        "self_heal": True,        # wrap skills in a crash-net; auto-recover
+    },
+
+    "security": {
+        # PHANTRON's defensive shield. All defensive only - never offensive.
+        "auto_audit_on_start": False,   # run a quick security audit at launch
+        "alert_on_threat": True,        # speak/surface heuristic findings
+    },
+
+    "messaging": {
+        "telegram": {
+            # Create a bot with @BotFather, paste the token here. Get your
+            # chat_id by messaging the bot then visiting:
+            #   https://api.telegram.org/bot<token>/getUpdates
+            "bot_token": "",
+            "chat_id": "",
+        },
+        "email": {
+            # For Gmail: turn on 2FA, then create an "App Password" and use it
+            # here (NOT your normal password). Leave blank to disable email.
+            "address": "",
+            "app_password": "",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "imap_host": "imap.gmail.com",
+        },
     },
 
     "paths": {
@@ -136,6 +162,8 @@ _ENV_KEYS = {
     ("brain", "openrouter", "api_key"): ["OPENROUTER_API_KEY"],
     ("brain", "openai", "api_key"): ["OPENAI_API_KEY", "GROQ_API_KEY", "PHANTRON_API_KEY"],
     ("brain", "anthropic", "api_key"): ["ANTHROPIC_API_KEY"],
+    ("messaging", "telegram", "bot_token"): ["TELEGRAM_BOT_TOKEN"],
+    ("messaging", "email", "app_password"): ["PHANTRON_EMAIL_PASSWORD"],
 }
 
 
