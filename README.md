@@ -36,35 +36,61 @@ python -m phantron --status   :: show brain/voice status and exit
 ## Give it a brain (so it can think + chat)
 
 PHANTRON talks to whatever you configure in `config.json` (created on first
-run). Pick **one**:
+run). You get both worlds — **online** and **offline**. Pick one:
 
-### Option A — Local & free (recommended): Ollama
+### ONLINE — OpenRouter (primary, recommended)
+One key, hundreds of models including free ones.
+1. Get a key at https://openrouter.ai/keys
+2. In `config.json`:
+```json
+"brain": {
+  "provider": "openrouter",
+  "openrouter": {
+    "api_key": "YOUR_OPENROUTER_KEY",
+    "model": "meta-llama/llama-3.1-8b-instruct:free"
+  }
+}
+```
+3. Or just leave `"provider": "auto"` — if a key is present it's used first.
+
+Other free model ids to try: `google/gemini-2.0-flash-exp:free`,
+`deepseek/deepseek-chat`. You can also pass the key via env `OPENROUTER_API_KEY`.
+
+### OFFLINE — Ollama (free, private, no internet)
 1. Install Ollama: https://ollama.com
 2. Pull a model: `ollama pull llama3.1`  (or `qwen2.5`, `mistral`, …)
 3. In `config.json` set `"brain": { "provider": "ollama" }` (or leave `"auto"`).
 
-Private, offline, no limits, no cost.
+No limits, no cost, runs entirely on your PC.
 
-### Option B — A cloud API key (OpenAI-compatible)
-Set these under `brain.openai` in `config.json` (works with OpenAI, **Groq
-(free tier)**, OpenRouter, LM Studio, Together, …):
-
-```json
-"openai": {
-  "base_url": "https://api.groq.com/openai/v1",
-  "api_key": "YOUR_KEY",
-  "model": "llama-3.3-70b-versatile"
-}
-```
-
-You can also pass the key via environment variable `OPENAI_API_KEY` /
-`GROQ_API_KEY` instead of putting it in the file.
-
-### Option C — Claude
-Fill `brain.anthropic.api_key` (or env `ANTHROPIC_API_KEY`).
+### Other online options
+- **OpenAI / Groq / LM Studio** — fill `brain.openai` (base_url + api_key + model).
+- **Claude** — fill `brain.anthropic.api_key` (or env `ANTHROPIC_API_KEY`).
 
 If no brain is configured, PHANTRON still runs in **command mode** (open apps,
 play songs, system info, etc.) via a built-in rule parser.
+
+---
+
+## Voice — clean Hindi + English (no accent mixing)
+
+PHANTRON detects Hindi (Devanagari) vs English (Latin) in every sentence and
+speaks each part with its **own** voice, so the accents never blend.
+
+1. See your installed voices: `python -m phantron --voices`
+2. Put a name fragment in `config.json`:
+```json
+"voice": {
+  "voice_hindi": "Kalpana",   // or "Hemant", "Swara", …
+  "voice_english": "David",   // or "Zira", "Mark", …
+  "mixed_speech": true
+}
+```
+Leave a field empty to auto-pick the best installed match. On Windows you can
+add more voices via *Settings → Time & Language → Speech*.
+
+For input, offline speech-to-text uses **Vosk** when `voice.vosk_model` points
+to a downloaded model folder; otherwise free Google web STT is used.
 
 ---
 

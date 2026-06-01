@@ -9,9 +9,12 @@ nothing secret has to live in the file if you would rather not.
 
 Zero-config friendly: if you change nothing, PHANTRON still boots and runs in
 text mode. To give it a real "brain" you only need ONE of:
-  * a running local Ollama  (free, private)        -> brain.provider = "ollama"
-  * any OpenAI-compatible API key (OpenAI/Groq/...) -> brain.provider = "openai"
-  * an Anthropic (Claude) API key                  -> brain.provider = "anthropic"
+  ONLINE:
+    * an OpenRouter API key (primary online brain) -> brain.provider="openrouter"
+    * any OpenAI-compatible key (OpenAI/Groq/...)   -> brain.provider="openai"
+    * an Anthropic (Claude) API key                -> brain.provider="anthropic"
+  OFFLINE:
+    * a running local Ollama (free, private)        -> brain.provider="ollama"
 """
 
 from __future__ import annotations
@@ -33,29 +36,40 @@ DEFAULTS: Dict[str, Any] = {
     "language": "hinglish",
 
     "brain": {
-        # "auto" picks the first provider that looks configured.
-        # Explicit options: "ollama" | "openai" | "anthropic" | "offline"
+        # "auto" prefers an online key (OpenRouter > OpenAI > Anthropic), then
+        # a live local Ollama, then "offline".
+        # Explicit: "openrouter" | "openai" | "anthropic" | "ollama" | "offline"
         "provider": "auto",
         "temperature": 0.6,
         "max_tokens": 1024,
         # how many recent turns of conversation to remember
         "memory_turns": 12,
         # optional separate model for image understanding (vision). Leave empty
-        # to reuse the main model. e.g. "gpt-4o-mini", "llava", "claude-3-5-sonnet-latest"
+        # to reuse the main model. e.g. a vision model id on OpenRouter/Ollama.
         "vision_model": "",
 
-        # Local, free, private. Install from https://ollama.com then:
-        #   ollama pull llama3.1     (or qwen2.5, mistral, etc.)
+        # ── ONLINE: OpenRouter (primary). One key, hundreds of models incl.
+        # free ones. Get a key at https://openrouter.ai/keys
+        # Example free models:
+        #   meta-llama/llama-3.1-8b-instruct:free
+        #   google/gemini-2.0-flash-exp:free
+        #   deepseek/deepseek-chat
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key": "",
+            "model": "meta-llama/llama-3.1-8b-instruct:free",
+        },
+
+        # ── OFFLINE: local Ollama (free, private, no internet).
+        # Install from https://ollama.com then:  ollama pull llama3.1
         "ollama": {
             "url": "http://localhost:11434",
             "model": "llama3.1",
         },
 
-        # OpenAI-COMPATIBLE. One block covers many providers - just change
-        # base_url + model + key:
+        # ── ONLINE: any other OpenAI-compatible API (OpenAI, Groq, LM Studio).
         #   OpenAI     : https://api.openai.com/v1            gpt-4o-mini
         #   Groq(free) : https://api.groq.com/openai/v1       llama-3.3-70b-versatile
-        #   OpenRouter : https://openrouter.ai/api/v1         (many free models)
         #   LM Studio  : http://localhost:1234/v1             (local, free)
         "openai": {
             "base_url": "https://api.openai.com/v1",
@@ -63,7 +77,7 @@ DEFAULTS: Dict[str, Any] = {
             "model": "gpt-4o-mini",
         },
 
-        # Anthropic Claude
+        # ── ONLINE: Anthropic Claude
         "anthropic": {
             "api_key": "",
             "model": "claude-3-5-sonnet-latest",
@@ -81,11 +95,19 @@ DEFAULTS: Dict[str, Any] = {
         "output": True,           # speak replies (needs a TTS engine)
         "wake_word": "phantron",
         "stt_language": "en-IN",  # speech-to-text language hint
-        "tts_voice": "",          # leave empty for auto Hindi/Indian voice pick
         "engine": "auto",         # "auto" | "pyttsx3" | "sapi"
         "rate": 178,              # speaking speed (words/min-ish)
         "volume": 1.0,            # 0.0 - 1.0
         "vosk_model": "",         # path to a Vosk model folder for offline STT
+
+        # Accent separation: PHANTRON detects Hindi vs English in each sentence
+        # and speaks each part with its OWN voice, so accents never mix.
+        # Leave a field empty to auto-pick the best matching installed voice.
+        # Put part of the installed voice's name/id (e.g. "Hemant", "Kalpana",
+        # "David", "Zira", "Heera", "Ravi"). See voices with: python -m phantron --voices
+        "voice_hindi": "",        # voice used for Hindi (Devanagari) text
+        "voice_english": "",      # voice used for English (Latin) text
+        "mixed_speech": True,     # split a sentence by script and switch voices
     },
 
     "vision": {
@@ -111,6 +133,7 @@ DEFAULTS: Dict[str, Any] = {
 
 # Environment variables that can fill in secrets without editing the file.
 _ENV_KEYS = {
+    ("brain", "openrouter", "api_key"): ["OPENROUTER_API_KEY"],
     ("brain", "openai", "api_key"): ["OPENAI_API_KEY", "GROQ_API_KEY", "PHANTRON_API_KEY"],
     ("brain", "anthropic", "api_key"): ["ANTHROPIC_API_KEY"],
 }

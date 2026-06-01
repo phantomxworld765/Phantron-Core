@@ -6,6 +6,7 @@ PHANTRON entry point.
     python -m phantron --cli      # text-only chat in the terminal
     python -m phantron --voice    # also start the voice (wake-word) loop
     python -m phantron --status   # print brain/voice status and exit
+    python -m phantron --voices   # list installed TTS voices (for config)
 """
 
 from __future__ import annotations
@@ -33,7 +34,22 @@ def _print_status(assistant: Assistant):
     print("  Brain     : %s / %s" % (st["brain"]["provider"], st["brain"]["model"]))
     print("  Detail    : %s" % st["brain"]["detail"])
     print("  Voice     : tts=%s  stt=%s" % (st["voice"]["tts"], st["voice"]["stt"]))
+    print("  Voice(hi) : %s" % st["voice"].get("voice_hi", "-"))
+    print("  Voice(en) : %s" % st["voice"].get("voice_en", "-"))
     print("  Autonomous: %s" % st["autonomous"])
+    print()
+
+
+def _print_voices(assistant: Assistant):
+    print(BANNER)
+    voices = assistant.voice.list_voices()
+    if not voices:
+        print("  No pyttsx3 voices found (install pyttsx3, or on Windows add")
+        print("  Hindi/English voices via Settings > Time & Language > Speech).\n")
+        return
+    print("  Installed TTS voices (put a name fragment in config voice_hindi/voice_english):\n")
+    for v in voices:
+        print("   - %s" % (v.get("name") or v.get("id")))
     print()
 
 
@@ -68,6 +84,10 @@ def main(argv=None):
 
     if "--status" in argv:
         _print_status(assistant)
+        return 0
+
+    if "--voices" in argv:
+        _print_voices(assistant)
         return 0
 
     if "--cli" in argv:

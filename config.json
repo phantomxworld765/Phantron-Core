@@ -8,6 +8,11 @@
     "max_tokens": 1024,
     "memory_turns": 12,
     "vision_model": "",
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "",
+      "model": "meta-llama/llama-3.1-8b-instruct:free"
+    },
     "ollama": {
       "url": "http://localhost:11434",
       "model": "llama3.1"
@@ -32,11 +37,13 @@
     "output": true,
     "wake_word": "phantron",
     "stt_language": "en-IN",
-    "tts_voice": "",
     "engine": "auto",
     "rate": 178,
     "volume": 1.0,
-    "vosk_model": ""
+    "vosk_model": "",
+    "voice_hindi": "",
+    "voice_english": "",
+    "mixed_speech": true
   },
   "vision": {
     "tesseract_cmd": ""
