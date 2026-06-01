@@ -1,0 +1,118 @@
+# -*- coding: utf-8 -*-
+"""
+PHANTRON assistant - the orchestrator that wires everything together.
+
+It owns the brain, the skills, the agent loop and (optionally) the voice
+engine, and exposes a single ``chat(text)`` method that the web server and
+the voice loop both call. Event callbacks let the UI show what PHANTRON is
+thinking and doing in real time.
+"""
+
+from __future__ import annotations
+
+import threading
+from typing import Callable, List, Optional
+
+from .agent import Agent
+from .brain import Brain
+from .config import Config, load_config
+from .skills import Skills
+from .voice import Voice
+
+
+class Assistant:
+    def __init__(self, cfg: Optional[Config] = None,
+                 on_event: Optional[Callable[[str, str, str], None]] = None):
+        self.cfg = cfg or load_config()
+        self._external_event = on_event
+        self._listeners: List[Callable[[dict], None]] = []
+
+        self.brain = Brain(self.cfg)
+        self.skills = Skills(self.cfg, on_event=self._event)
+        self.agent = Agent(self.cfg, self.brain, self.skills, on_event=self._event)
+        self.voice = Voice(self.cfg, on_event=self._event)
+
+        self._voice_thread: Optional[threading.Thread] = None
+        self._voice_stop = threading.Event()
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Event plumbing (for the UI)
+    # ─────────────────────────────────────────────────────────────────────
+    def add_listener(self, fn: Callable[[dict], None]):
+        self._listeners.append(fn)
+
+    def _event(self, action: str, detail: str = "", kind: str = "info"):
+        payload = {"action": action, "detail": detail, "kind": kind}
+        for fn in list(self._listeners):
+            try:
+                fn(payload)
+            except Exception:
+                pass
+        if self._external_event:
+            try:
+                self._external_event(action, detail, kind)
+            except Exception:
+                pass
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Core
+    # ─────────────────────────────────────────────────────────────────────
+    def chat(self, text: str, speak: bool = False) -> str:
+        reply = self.agent.handle(text)
+        if speak and self.voice.can_speak and reply:
+            threading.Thread(target=self.voice.speak, args=(reply,), daemon=True).start()
+        return reply
+
+    def status(self) -> dict:
+        b = self.brain.status()
+        return {
+            "assistant_name": self.cfg.get("assistant_name", "PHANTRON"),
+            "user_name": self.cfg.get("user_name", "P7"),
+            "version": __import__("phantron").__version__,
+            "brain": b,
+            "voice": self.voice.status(),
+            "autonomous": bool(self.cfg.get("agent.autonomous", True)),
+        }
+
+    def greeting(self) -> str:
+        b = self.brain.status()
+        name = self.cfg.get("assistant_name", "PHANTRON")
+        user = self.cfg.get("user_name", "P7")
+        if b["provider"] == "offline":
+            return ("%s online, %s. Brain abhi connected nahi - command mode me hoon. "
+                    "Ollama ya API key laga do toh main poori tarah soch paunga." % (name, user))
+        return "%s online, %s. Brain ready (%s). Bolo kya karna hai?" % (name, user, b["model"])
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Voice loop (wake-word -> listen -> act -> speak)
+    # ─────────────────────────────────────────────────────────────────────
+    def start_voice_loop(self):
+        if not self.voice.can_listen:
+            return False
+        if self._voice_thread and self._voice_thread.is_alive():
+            return True
+        self._voice_stop.clear()
+        self._voice_thread = threading.Thread(target=self._voice_loop, daemon=True)
+        self._voice_thread.start()
+        return True
+
+    def stop_voice_loop(self):
+        self._voice_stop.set()
+
+    def _voice_loop(self):
+        wake = (self.cfg.get("voice.wake_word", "phantron") or "phantron").lower()
+        self._event("Voice", "Listening for wake word '%s'" % wake, "listen")
+        while not self._voice_stop.is_set():
+            heard = self.voice.listen_once(timeout=5, phrase_limit=6)
+            if not heard:
+                continue
+            low = heard.lower()
+            if wake in low:
+                # remove the wake word; if a command followed, use it directly
+                command = low.split(wake, 1)[1].strip(" ,.!")
+                if not command:
+                    self.voice.speak("Haan, " + self.cfg.get("user_name", "P7"))
+                    command = self.voice.listen_once(timeout=6, phrase_limit=8) or ""
+                if command:
+                    reply = self.chat(command, speak=True)
+                    self._event("Replied", reply[:80], "speak")
