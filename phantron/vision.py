@@ -149,6 +149,28 @@ class Vision:
         return None
 
     # ─────────────────────────────────────────────────────────────────────
+    #  Read an on-screen error message (OCR, focused on error-like lines)
+    # ─────────────────────────────────────────────────────────────────────
+    def read_error(self) -> str:
+        """OCR the screen and return lines that look like an error/traceback."""
+        text = self.read_screen()
+        if not text:
+            return ""
+        # If OCR/capture is unavailable, propagate that as a sentinel so callers
+        # can show the right "install X" hint instead of treating it as an error.
+        if text.startswith(("OCR ke liye", "Screen capture")):
+            return "__UNAVAILABLE__:" + text
+        keywords = ("error", "exception", "traceback", "failed", "cannot",
+                    "not found", "undefined", "unexpected", "syntax", "fatal",
+                    "denied", "refused", "warning", "errno", "stack")
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        hits = [ln for ln in lines if any(k in ln.lower() for k in keywords)]
+        if hits:
+            self._emit("Error read", hits[0][:80], "vision")
+            return "\n".join(hits[:12])
+        return ""  # no error-like text found
+
+    # ─────────────────────────────────────────────────────────────────────
     #  Describe via a vision LLM (optional)
     # ─────────────────────────────────────────────────────────────────────
     def describe(self, question: str = "What is on the screen?") -> str:

@@ -759,6 +759,208 @@ class Skills:
             return "Error: " + str(exc)
 
     # ─────────────────────────────────────────────────────────────────────
+    #  Vision + self-heal combo: read an on-screen error and explain/fix it
+    # ─────────────────────────────────────────────────────────────────────
+    def fix_screen_error(self, _: str = "") -> str:
+        """Look at the screen, find an error message, and explain how to fix it."""
+        if not self.vision:
+            return "Vision module load nahi hua."
+        err = self.vision.read_error()
+        if err.startswith("__UNAVAILABLE__:"):
+            return err.split(":", 1)[1]
+        if not err:
+            return "Screen pe koi obvious error message nahi dikha, %s." % self.name
+        self._log("Screen error", err[:60], "vision")
+        # Ask the brain (via selfheal) to explain + suggest a fix, if online.
+        if self.selfheal and getattr(self.selfheal, "brain", None) and self.selfheal.brain.online:
+            from .brain import ERR as _ERR
+            out = self.selfheal.brain.ask(
+                "You are PHANTRON. The user pointed you at their screen and this error "
+                "text was read via OCR. In short Hinglish, explain what it means and the "
+                "most likely fix (2-4 lines).",
+                err,
+            )
+            if not out.startswith(_ERR):
+                return "Screen pe ye error dikha:\n%s\n\n-> %s" % (err[:200], out.strip())
+        return ("Screen pe ye error/warning dikha:\n%s\n\n(Brain online karo to main "
+                "iska fix bhi bata dunga, %s.)" % (err[:400], self.name))
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Scheduled (daily/recurring) reminders
+    # ─────────────────────────────────────────────────────────────────────
+    def schedule_reminder(self, text: str = "", time_str: str = "", repeat: str = "daily") -> str:
+        """Set a recurring reminder, e.g. schedule_reminder('gym', '18:30')."""
+        if not self.memory:
+            return "Schedule ke liye memory module chahiye."
+        if not text:
+            return "Kya yaad dilana hai?"
+        hh, mm = self._parse_time(time_str)
+        if hh is None:
+            return "Time samajh nahi aaya. Aise do: '9:00', '18:30', '7 pm'."
+        self.memory.add_schedule(text, hh, mm, repeat or "daily")
+        self._ensure_schedule_checker()
+        self._log("Schedule set", "%s @ %02d:%02d" % (text, hh, mm))
+        return "Set kar diya %s: roz %02d:%02d baje yaad dilaunga -> %s" % (self.name, hh, mm, text)
+
+    def list_schedules(self, _: str = "") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        return self.memory.list_schedules()
+
+    def remove_schedule(self, index: Any = 0) -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        try:
+            i = int(index) - 1
+        except Exception:
+            return "Konsa number? 'list schedules' se dekho."
+        return "Schedule hata diya." if self.memory.remove_schedule(i) else "Wo schedule mila nahi."
+
+    def _parse_time(self, s: str):
+        """Parse '9:00', '18:30', '7pm', '7 am' -> (hour24, minute) or (None,None)."""
+        s = (s or "").strip().lower()
+        m = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", s)
+        if not m:
+            return None, None
+        hh = int(m.group(1)); mm = int(m.group(2) or 0); ap = m.group(3)
+        if ap == "pm" and hh < 12:
+            hh += 12
+        elif ap == "am" and hh == 12:
+            hh = 0
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            return hh, mm
+        return None, None
+
+    def _ensure_schedule_checker(self):
+        """Start a single background loop that fires due daily reminders."""
+        if getattr(self, "_sched_running", False):
+            return
+        self._sched_running = True
+        import threading
+        from datetime import datetime
+
+        def loop():
+            while True:
+                try:
+                    now = datetime.now()
+                    day = now.strftime("%Y-%m-%d")
+                    for s in (self.memory.all_schedules() if self.memory else []):
+                        if s.get("hour") == now.hour and s.get("minute") == now.minute \
+                                and s.get("last_fired") != day:
+                            self.memory.mark_schedule_fired(s["id"], day)
+                            self._fire(s.get("text", "reminder"))
+                except Exception:
+                    pass
+                time.sleep(30)
+
+        t = threading.Thread(target=loop, daemon=True)
+        t.start()
+        self._timers.append(t)
+
+    def start_schedules(self) -> int:
+        """Called at startup: launch the checker if any schedules exist."""
+        if not self.memory:
+            return 0
+        scheds = self.memory.all_schedules()
+        if scheds:
+            self._ensure_schedule_checker()
+        return len(scheds)
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  File search ("mera resume kahan hai")
+    # ─────────────────────────────────────────────────────────────────────
+    def find_files(self, query: str = "", where: str = "") -> str:
+        q = (query or "").strip().lower()
+        if not q:
+            return "Kya dhundu? (file ka naam ya part)"
+        roots = []
+        if where:
+            roots = [Path(where)]
+        else:
+            home = Path.home()
+            for sub in ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"):
+                p = home / sub
+                if p.exists():
+                    roots.append(p)
+            if not roots:
+                roots = [home]
+        self._log("Searching files", q)
+        matches: List[str] = []
+        scanned = 0
+        try:
+            for root in roots:
+                for dirpath, dirnames, filenames in os.walk(root):
+                    # skip hidden/system dirs to stay fast
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                    for fn in filenames:
+                        scanned += 1
+                        if q in fn.lower():
+                            matches.append(str(Path(dirpath) / fn))
+                            if len(matches) >= 25:
+                                break
+                        if scanned > 60000:
+                            break
+                    if len(matches) >= 25 or scanned > 60000:
+                        break
+                if len(matches) >= 25:
+                    break
+        except Exception as exc:
+            return "Search error: " + str(exc)
+        if not matches:
+            return "'%s' naam ki koi file nahi mili, %s." % (query, self.name)
+        return "Mili (%d):\n- %s" % (len(matches), "\n- ".join(matches[:25]))
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Auto-backup a folder (zip into the Phantron backups dir)
+    # ─────────────────────────────────────────────────────────────────────
+    def backup_folder(self, source: str = "", name: str = "") -> str:
+        src = (source or "").strip()
+        if not src:
+            return "Kis folder ka backup lun? (path do)"
+        srcp = Path(src)
+        if not srcp.exists():
+            # try a known folder name
+            known = {"documents": Path.home() / "Documents",
+                     "desktop": Path.home() / "Desktop",
+                     "pictures": Path.home() / "Pictures",
+                     "downloads": Path.home() / "Downloads"}
+            srcp = known.get(src.lower(), srcp)
+        if not srcp.exists():
+            return "Folder nahi mila: " + src
+        try:
+            import shutil
+            backups = self.cfg.files_dir().parent / "backups"
+            backups.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            base = backups / ("%s_%s" % (name or srcp.name, stamp))
+            self._log("Backing up", str(srcp))
+            archive = shutil.make_archive(str(base), "zip", str(srcp))
+            size_mb = Path(archive).stat().st_size / 1048576
+            return "Backup ban gaya (%.1f MB): %s" % (size_mb, archive)
+        except Exception as exc:
+            return "Backup error: " + str(exc)
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Voice authentication (passphrase gate - simple, local)
+    # ─────────────────────────────────────────────────────────────────────
+    def set_voice_passphrase(self, phrase: str = "") -> str:
+        if not self.memory:
+            return "Memory module load nahi hua."
+        p = (phrase or "").strip().lower()
+        if not p:
+            return "Passphrase bolo/likho jo set karni hai."
+        self.memory.remember("__voice_passphrase__", p)
+        return "Voice passphrase set kar di, %s. Ab sensitive commands se pehle ye poochi jayegi." % self.name
+
+    def check_passphrase(self, phrase: str = "") -> bool:
+        if not self.memory:
+            return True
+        saved = self.memory.recall("__voice_passphrase__")
+        if not saved or "kuch yaad nahi" in saved:
+            return True  # no passphrase set -> open
+        return (phrase or "").strip().lower() == saved.strip().lower()
+
+    # ─────────────────────────────────────────────────────────────────────
     #  Security / defensive system (delegates to Security module)
     # ─────────────────────────────────────────────────────────────────────
     def security_audit(self, _: str = "") -> str:
@@ -843,7 +1045,8 @@ class Skills:
             for key in ("target", "query", "text", "command", "action", "path",
                         "question", "keys", "value", "key", "city", "topic",
                         "expression", "name", "level", "mode", "to", "message",
-                        "subject", "body", "count", "fmt", "error", "chat_id"):
+                        "subject", "body", "count", "fmt", "error", "chat_id",
+                        "where", "source", "time_str", "phrase", "index"):
                 if key in (args or {}):
                     return fn(args[key])
             return fn()
@@ -912,4 +1115,12 @@ TOOLS: List[Dict[str, str]] = [
     # --- Self-healing ---
     {"name": "heal_code", "args": "path,error", "desc": "Auto-fix a Python file (verified, with backup)"},
     {"name": "explain_error", "args": "", "desc": "Explain the most recent internal error"},
+    {"name": "fix_screen_error", "args": "", "desc": "Look at the screen, read an error, and explain/fix it"},
+    # --- Scheduling / files / backup / voice-auth ---
+    {"name": "schedule_reminder", "args": "text,time_str,repeat", "desc": "Daily/recurring reminder, e.g. text='gym' time_str='18:30'"},
+    {"name": "list_schedules", "args": "", "desc": "List daily/scheduled reminders"},
+    {"name": "remove_schedule", "args": "index", "desc": "Remove a scheduled reminder by its list number"},
+    {"name": "find_files", "args": "query,where", "desc": "Search for files by name (e.g. 'resume')"},
+    {"name": "backup_folder", "args": "source,name", "desc": "Zip-backup a folder into the Phantron backups dir"},
+    {"name": "set_voice_passphrase", "args": "phrase", "desc": "Set a passphrase to gate sensitive voice commands"},
 ]

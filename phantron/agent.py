@@ -373,8 +373,36 @@ class Agent:
         m = re.search(r"\b(?:heal|fix|repair)\s+(?:code\s+)?(?:file\s+)?([\w./\\-]+\.py)", t)
         if m:
             return self.skills.heal_code(m.group(1).strip())
+        if re.search(r"\bfix (?:this |the )?(?:screen )?error\b|screen pe error|ye error theek", t):
+            return self.skills.fix_screen_error()
         if re.search(r"\bexplain (?:the )?(?:last )?error\b|kya error tha", t):
             return self.skills.explain_error()
+
+        # scheduled / daily reminders
+        m = re.search(r"\b(?:every ?day|daily|roz)\s+(?:at\s+)?(.+?)\s+(?:remind me to |remind me |yaad dilana |yaad dila )(.+)", t)
+        if m:
+            return self.skills.schedule_reminder(m.group(2).strip(), m.group(1).strip())
+        m = re.search(r"\bremind me (?:to )?(.+?)\s+(?:every ?day|daily|roz)\s+(?:at\s+)?(.+)", t)
+        if m:
+            return self.skills.schedule_reminder(m.group(1).strip(), m.group(2).strip())
+        if re.search(r"\b(?:list|show|mere)\s+(?:schedules?|daily reminders?)\b", t):
+            return self.skills.list_schedules()
+
+        # file search
+        m = re.search(r"\b(?:find|search|dhundo|locate|kahan hai|where is)\s+(?:file\s+|my\s+)?(.+?)(?:\s+file)?$", t)
+        if m and re.search(r"\b(find|search|dhundo|locate|kahan hai|where is)\b", t) \
+                and not re.search(r"\b(web|google|internet|online|news|weather)\b", t):
+            return self.skills.find_files(m.group(1).strip(" ?.!"))
+
+        # backup
+        m = re.search(r"\bbackup\s+(?:my\s+)?(.+?)(?:\s+folder)?$", t)
+        if m:
+            return self.skills.backup_folder(m.group(1).strip(" ?.!"))
+
+        # voice passphrase
+        m = re.search(r"\bset (?:my )?(?:voice )?passphrase (?:to |as )?(.+)", t)
+        if m:
+            return self.skills.set_voice_passphrase(m.group(1).strip(" ?.!"))
 
         # reminders list + export
         if re.search(r"\b(?:list|show|pending|mere)\s+reminders?\b", t):

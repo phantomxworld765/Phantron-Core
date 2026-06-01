@@ -120,7 +120,10 @@ If `pyaudio` won't install on Windows:
 `remember`, `recall`, `forget`, `clipboard`, `hotkey`, `window`, `write_in`,
 `set_reminder`, `timer`, `add_note`, `read_notes`, `add_todo`, `list_todo`,
 `weather`, `news`, `calc`, `close_app`, `list_processes`, `lock_pc`, `power`,
-`volume`, `open_folder`.
+`volume`, `open_folder`, `security_audit`, `antivirus_scan`, `firewall`,
+`open_ports`, `scan_suspicious`, `quarantine_file`, `send_whatsapp`,
+`send_telegram`, `send_email`, `read_email`, `heal_code`, `fix_screen_error`,
+`schedule_reminder`, `find_files`, `backup_folder`, `set_voice_passphrase`.
 
 In **autonomous** mode the brain decides which tools to call and can chain a
 few of them to finish a request, then replies to you.
@@ -165,6 +168,19 @@ P7's own machine.
 - **"fix file path/to/x.py"** — PHANTRON reads the file, asks the brain for a
   correction, **verifies it compiles**, backs up the original to `.bak`, then
   writes the fix. If the fix doesn't compile, nothing is changed.
+- **"fix this error"** — PHANTRON looks at your screen (OCR), finds the error
+  message, and explains the likely fix (vision + brain combo).
+
+### Scheduling, files, backup & voice-lock
+- **Daily reminders** — "remind me to drink water every day at 9:00" or
+  "every day at 18:30 remind me gym". Survives restarts; "list schedules" to
+  view, and remove by number.
+- **File search** — "where is my resume", "find budget.xlsx" — scans your
+  Desktop/Documents/Downloads/etc. and lists matches.
+- **Auto-backup** — "backup my documents" zips a folder into
+  `~/Phantron/backups`.
+- **Voice passphrase** — "set my voice passphrase to phantom unlock" gates
+  sensitive commands behind a spoken/typed phrase (stored locally).
 
 ### Vision (PHANTRON can SEE the screen)
 - `read_screen` — OCR the whole screen to text.

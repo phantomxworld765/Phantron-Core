@@ -30,10 +30,12 @@ class Memory:
         self.facts_path = base / "facts.json"
         self.journal_path = base / "journal.json"
         self.reminders_path = base / "reminders.json"
+        self.schedules_path = base / "schedules.json"
         self._lock = threading.Lock()
         self.facts: Dict[str, str] = self._load(self.facts_path, {})
         self.journal: List[dict] = self._load(self.journal_path, [])
         self.reminders: List[dict] = self._load(self.reminders_path, [])
+        self.schedules: List[dict] = self._load(self.schedules_path, [])
 
     # ---- io ----
     def _load(self, path: Path, default):
@@ -150,6 +152,47 @@ class Memory:
             when = datetime.fromtimestamp(r["fire_at"]).strftime("%d %b %I:%M %p")
             lines.append("- %s @ %s" % (r["text"], when))
         return "Pending reminders:\n" + "\n".join(lines)
+
+    # ---- scheduled (recurring/daily) reminders ----
+    def add_schedule(self, text: str, hour: int, minute: int = 0, repeat: str = "daily") -> dict:
+        """Store a recurring reminder, e.g. every day at 09:00."""
+        with self._lock:
+            item = {"id": int(time.time() * 1000), "text": text,
+                    "hour": int(hour), "minute": int(minute),
+                    "repeat": repeat, "last_fired": ""}
+            self.schedules.append(item)
+            self._save(self.schedules_path, self.schedules)
+            return item
+
+    def mark_schedule_fired(self, schedule_id: int, day_stamp: str):
+        with self._lock:
+            for s in self.schedules:
+                if s.get("id") == schedule_id:
+                    s["last_fired"] = day_stamp
+            self._save(self.schedules_path, self.schedules)
+
+    def all_schedules(self) -> List[dict]:
+        with self._lock:
+            return [dict(s) for s in self.schedules]
+
+    def remove_schedule(self, index: int) -> bool:
+        with self._lock:
+            if 0 <= index < len(self.schedules):
+                self.schedules.pop(index)
+                self._save(self.schedules_path, self.schedules)
+                return True
+        return False
+
+    def list_schedules(self) -> str:
+        with self._lock:
+            scheds = list(self.schedules)
+        if not scheds:
+            return "Koi daily/scheduled reminder set nahi hai, P7."
+        lines = []
+        for i, s in enumerate(scheds, 1):
+            lines.append("%d. %s @ %02d:%02d (%s)" % (
+                i, s["text"], s["hour"], s["minute"], s.get("repeat", "daily")))
+        return "Scheduled reminders:\n" + "\n".join(lines)
 
     # ---- conversation export ----
     def export_conversation(self, fmt: str = "txt") -> Path:

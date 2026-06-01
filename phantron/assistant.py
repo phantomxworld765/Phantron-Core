@@ -58,6 +58,14 @@ class Assistant:
         except Exception:
             pass
 
+        # Launch the daily/scheduled-reminder checker if any are set.
+        try:
+            n = self.skills.start_schedules()
+            if n:
+                self._event("Schedules", "%d daily reminders active" % n, "info")
+        except Exception:
+            pass
+
         # Optional: a quick security audit at launch.
         if self.cfg.get("security.auto_audit_on_start", False):
             threading.Thread(target=self._startup_audit, daemon=True).start()
